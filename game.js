@@ -19,7 +19,7 @@ const CLASS_STYLES = {
 let ws = null, myId = null, myClass = null, myName = '';
 let dead = false, killcount = 0, gameStartTime = 0;
 let players = {}, projectiles = {}, obstacles = {};
-let zoom = 0.9, direction = 0;
+let zoom = 1.4, direction = 0;
 const pressed = {};
 let lastMoveSend = 0;
 let app, worldContainer, uiContainer;
@@ -142,49 +142,83 @@ function bakeGraphic(g, w, h, cx, cy) {
 }
 
 function makeSwordTexture(enhanced) {
+  // Clean katana-style: long curved blade, simple guard, short handle
+  // Drawn pointing UP (tip at top), anchor at bottom of handle
   const g = new PIXI.Graphics();
-  g.beginFill(enhanced ? 0xffdd66 : 0xddddff, 1);
-  g.moveTo(0, -50); g.lineTo(5, -10); g.lineTo(3, 40);
-  g.lineTo(0, 48); g.lineTo(-3, 40); g.lineTo(-5, -10);
-  g.closePath(); g.endFill();
-  g.lineStyle(1, enhanced ? 0xffaa00 : 0xaaaacc, 0.7);
-  g.moveTo(0, -50); g.lineTo(0, 40);
+  const W = 60, H = 130;
+
+  // blade — slightly curved (katana feel), thin and long
+  // left edge curves inward, right edge is nearly straight
+  const bladeCol = enhanced ? 0xffe080 : 0xd8d8e8;
+  const edgeCol  = enhanced ? 0xffaa00 : 0x888899;
+  g.beginFill(bladeCol, 1);
+  // tip at (0,-55), base at (~5, 30)
+  g.moveTo(0, -55);          // tip
+  g.bezierCurveTo(4, -30, 6, 0, 6, 28);   // right edge — slight curve
+  g.lineTo(3, 32);           // base-right
+  g.lineTo(-1, 28);          // base-left
+  g.bezierCurveTo(-3, 5, -1, -20, 0, -55); // left edge curves back to tip
+  g.endFill();
+  // edge highlight line down right side
+  g.lineStyle(1, edgeCol, 0.5);
+  g.moveTo(0, -55);
+  g.bezierCurveTo(3, -25, 5, 0, 5, 26);
   g.lineStyle(0);
-  g.beginFill(enhanced ? 0xcc8800 : 0x888899, 1);
-  g.drawRoundedRect(-12, -8, 24, 6, 3); g.endFill();
-  g.beginFill(enhanced ? 0x8b4513 : 0x6b3a1f, 1);
-  g.drawRoundedRect(-4, 0, 8, 28, 2); g.endFill();
-  g.lineStyle(1.5, enhanced ? 0xffaa44 : 0xaaaaaa, 0.6);
-  for (let i = 0; i < 3; i++) { g.moveTo(-4, 6 + i*8); g.lineTo(4, 6 + i*8); }
+  // simple crossguard — short horizontal bar
+  const guardCol = enhanced ? 0xcc9900 : 0x777788;
+  g.beginFill(guardCol, 1);
+  g.drawRoundedRect(-10, 28, 20, 5, 2);
+  g.endFill();
+  // handle — slim, dark
+  const handleCol = enhanced ? 0x7a3a00 : 0x3a2a1a;
+  g.beginFill(handleCol, 1);
+  g.drawRoundedRect(-3, 33, 7, 22, 2);
+  g.endFill();
+  // wrap lines
+  g.lineStyle(1, enhanced ? 0xffcc66 : 0x666655, 0.6);
+  for (let i = 0; i < 3; i++) { g.moveTo(-3, 37 + i*6); g.lineTo(4, 37 + i*6); }
   g.lineStyle(0);
-  g.beginFill(enhanced ? 0xffcc44 : 0x999aaa, 1);
-  g.drawCircle(0, 30, 5); g.endFill();
-  if (enhanced) {
-    g.beginFill(0xffaa00, 0.15);
-    g.drawEllipse(0, -10, 18, 60); g.endFill();
-  }
-  return bakeGraphic(g, 40, 110, 20, 58);
+  // pommel
+  g.beginFill(guardCol, 1);
+  g.drawCircle(0.5, 57, 4);
+  g.endFill();
+
+  return bakeGraphic(g, W, H, W/2, 60);
 }
 
 function makeIceSwordTexture() {
+  // Same clean katana shape but icy blue
   const g = new PIXI.Graphics();
-  g.beginFill(0x88eeff, 0.9);
-  g.moveTo(0, -55); g.lineTo(7, -15); g.lineTo(10, 30);
-  g.lineTo(0, 45); g.lineTo(-10, 30); g.lineTo(-7, -15);
-  g.closePath(); g.endFill();
-  g.lineStyle(1, 0xffffff, 0.5);
-  g.moveTo(0, -55); g.lineTo(7, -15);
-  g.moveTo(0, -55); g.lineTo(-7, -15);
+  const W = 60, H = 130;
+
+  g.beginFill(0xaaeeff, 0.95);
+  g.moveTo(0, -55);
+  g.bezierCurveTo(4, -30, 6, 0, 6, 28);
+  g.lineTo(3, 32);
+  g.lineTo(-1, 28);
+  g.bezierCurveTo(-3, 5, -1, -20, 0, -55);
+  g.endFill();
+  // icy edge shimmer
+  g.lineStyle(1.5, 0xffffff, 0.55);
+  g.moveTo(0, -55);
+  g.bezierCurveTo(3, -25, 5, 0, 5, 26);
   g.lineStyle(0);
-  g.beginFill(0x44aacc, 1);
-  g.moveTo(-15, -10); g.lineTo(15, -10); g.lineTo(10, -2); g.lineTo(-10, -2); g.closePath(); g.endFill();
-  g.beginFill(0x336688, 1);
-  g.drawRoundedRect(-4, 0, 8, 26, 2); g.endFill();
-  g.beginFill(0x88ccee, 1);
-  g.drawCircle(0, 28, 5); g.endFill();
-  g.beginFill(0xffffff, 0.2);
-  g.moveTo(0, -55); g.lineTo(3, -15); g.lineTo(2, 20); g.lineTo(0, 30); g.lineTo(-2, 20); g.lineTo(-3, -15); g.closePath(); g.endFill();
-  return bakeGraphic(g, 44, 112, 22, 60);
+  // guard
+  g.beginFill(0x5599bb, 1);
+  g.drawRoundedRect(-10, 28, 20, 5, 2);
+  g.endFill();
+  // handle
+  g.beginFill(0x224466, 1);
+  g.drawRoundedRect(-3, 33, 7, 22, 2);
+  g.endFill();
+  g.lineStyle(1, 0x88ccee, 0.5);
+  for (let i = 0; i < 3; i++) { g.moveTo(-3, 37 + i*6); g.lineTo(4, 37 + i*6); }
+  g.lineStyle(0);
+  g.beginFill(0x5599bb, 1);
+  g.drawCircle(0.5, 57, 4);
+  g.endFill();
+
+  return bakeGraphic(g, W, H, W/2, 60);
 }
 
 function makeRockTexture() {
@@ -411,35 +445,44 @@ function updatePlayerSprite(id, p, now) {
   const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
   c.x = p.renderX; c.y = p.renderY;
 
-  let a = p.renderDir ?? p.dir;
+  const facing = p.renderDir ?? p.dir;
+  // Sword swing: starts offset -PI*0.7 from facing, sweeps forward to +PI*0.3
+  // giving a clean side-to-side slash arc
+  let swingOffset = -Math.PI * 0.7; // resting position (sword held back-right)
   if (p.isHitting) {
     const elapsed = now - p.timeFromLastHit;
-    a += Math.sin(Math.min(elapsed / 400, 1) * Math.PI) * (Math.PI / 2) * 1.7;
+    const progress = Math.min(elapsed / 400, 1);
+    // easeOut swing: fast start, slow end
+    const eased = 1 - Math.pow(1 - progress, 2);
+    swingOffset = -Math.PI * 0.7 + eased * Math.PI * 1.0;
   }
+  const a = facing + swingOffset;
 
-  // arms
+  // arms — flat color, black outline, simple
   ['arm1','arm2'].forEach((name, idx) => {
     const arm = c.getChildByName(name);
     if (!arm) return;
     arm.clear();
     const angle = a + (idx === 0 ? -1 : 1) * (Math.PI / 4);
     const ax = Math.cos(angle) * 21, ay = Math.sin(angle) * 21;
-    arm.beginFill(0x000000, 0.2); arm.drawCircle(ax+1.5, ay+2, 8.5); arm.endFill();
-    arm.lineStyle(2, st.outline, 0.8);
-    arm.beginFill(st.arm); arm.drawCircle(ax, ay, 8); arm.endFill();
-    arm.lineStyle(0);
-    arm.beginFill(st.bodyHi, 0.3); arm.drawEllipse(ax-2, ay-2, 4, 3); arm.endFill();
+    arm.lineStyle(2, 0x000000, 0.6);
+    arm.beginFill(st.arm, 1);
+    arm.drawCircle(ax, ay, 7);
+    arm.endFill();
   });
 
-  // sword
+  // sword — positioned at arm extension, blade points in direction of 'a'
   const sword = c.getChildByName('sword');
   if (sword) {
     if (p.basicEnhanced) sword.texture = texCache.enhancedSword;
     else if (p.gameClass === 'ice') sword.texture = texCache.iceSword;
     else sword.texture = texCache.sword;
-    sword.x = Math.cos(a) * 20; sword.y = Math.sin(a) * 20;
-    sword.rotation = a + Math.PI;
-    sword.scale.set(p.basicEnhanced ? 1.15 : 1.0);
+    // place sword handle at arm position
+    sword.x = Math.cos(a) * 22;
+    sword.y = Math.sin(a) * 22;
+    // blade points in direction a (tip away from player)
+    sword.rotation = a + Math.PI / 2;
+    sword.scale.set(p.basicEnhanced ? 1.2 : 1.0);
   }
 
   // aura
@@ -495,8 +538,7 @@ function updatePlayerSprite(id, p, now) {
     hpBar.clear();
     const pct = Math.max(0,Math.min(1,(p.renderHealth??p.health)/100));
     const col = pct>0.6?0x44ee66:pct>0.3?0xffcc22:0xff2233;
-    hpBar.beginFill(col,0.95); hpBar.drawRoundedRect(-30,27,60*pct,7,3); hpBar.endFill();
-    hpBar.beginFill(0xffffff,0.25); hpBar.drawRoundedRect(-30,27,60*pct,3,2); hpBar.endFill();
+    hpBar.beginFill(col,0.95); hpBar.drawRoundedRect(-26,26,52*pct,6,3); hpBar.endFill();
   }
 
   // mp bar (local only)
@@ -505,7 +547,7 @@ function updatePlayerSprite(id, p, now) {
     mpBar.clear();
     if (id===myId) {
       const pct=Math.max(0,Math.min(1,(p.renderMana??p.mana)/100));
-      mpBar.beginFill(0x4488ff,0.9); mpBar.drawRoundedRect(-30,36,60*pct,5,3); mpBar.endFill();
+      mpBar.beginFill(0x4488ff,0.9); mpBar.drawRoundedRect(-26,34,52*pct,5,3); mpBar.endFill();
     }
   }
 
@@ -514,34 +556,33 @@ function updatePlayerSprite(id, p, now) {
 
 function buildPlayerContainer(c, gameClass) {
   const st = CLASS_STYLES[gameClass]||CLASS_STYLES.fire;
+  // aura behind everything
   const aura = new PIXI.Graphics(); aura.name='aura'; c.addChild(aura);
+  // arms (drawn dynamically)
   const arm1 = new PIXI.Graphics(); arm1.name='arm1'; c.addChild(arm1);
   const arm2 = new PIXI.Graphics(); arm2.name='arm2'; c.addChild(arm2);
-  // sword
+  // sword — anchor at handle bottom so it sits in hand correctly
   const sword = new PIXI.Sprite(gameClass==='ice'?texCache.iceSword:texCache.sword);
-  sword.anchor.set(0.5,0.88); sword.name='sword'; c.addChild(sword);
-  // armor
+  sword.anchor.set(0.5, 1.0); sword.name='sword'; c.addChild(sword);
+  // armor overlay
   const armor = new PIXI.Graphics(); armor.name='armor'; c.addChild(armor);
-  // body shadow
-  const shadow = new PIXI.Graphics();
-  shadow.beginFill(0x000000,0.2); shadow.drawEllipse(4,26,18,6); shadow.endFill();
-  c.addChild(shadow);
-  // body
+  // body — flat single class color, black outline only
   const body = new PIXI.Graphics();
-  body.lineStyle(3,st.outline,1); body.beginFill(st.body); body.drawCircle(0,0,20); body.endFill();
-  body.lineStyle(0); body.beginFill(st.bodyHi,0.45); body.drawEllipse(-5,-7,9,6); body.endFill();
-  body.lineStyle(1.5,st.outline,0.35); body.drawCircle(0,0,13);
+  body.lineStyle(2.5, 0x000000, 0.7);
+  body.beginFill(st.body, 1);
+  body.drawCircle(0, 0, 20);
+  body.endFill();
   body.name='body'; c.addChild(body);
   // nametag
   const nt = new PIXI.Text('',{fontSize:14,fill:0xffffff,fontWeight:'700',dropShadow:true,dropShadowBlur:4,dropShadowColor:0x000000,dropShadowDistance:0});
-  nt.anchor.set(0.5); nt.y=-40; nt.name='nametag'; c.addChild(nt);
+  nt.anchor.set(0.5); nt.y=-38; nt.name='nametag'; c.addChild(nt);
   // hp bg + bar
   const hpBg = new PIXI.Graphics();
-  hpBg.beginFill(0x000000,0.55); hpBg.drawRoundedRect(-30,27,60,7,3); hpBg.endFill(); c.addChild(hpBg);
+  hpBg.beginFill(0x000000,0.5); hpBg.drawRoundedRect(-26,26,52,6,3); hpBg.endFill(); c.addChild(hpBg);
   const hpBar = new PIXI.Graphics(); hpBar.name='hpbar'; c.addChild(hpBar);
   // mp bg + bar
   const mpBg = new PIXI.Graphics();
-  mpBg.beginFill(0x000000,0.55); mpBg.drawRoundedRect(-30,36,60,5,3); mpBg.endFill(); c.addChild(mpBg);
+  mpBg.beginFill(0x000000,0.5); mpBg.drawRoundedRect(-26,34,52,5,3); mpBg.endFill(); c.addChild(mpBg);
   const mpBar = new PIXI.Graphics(); mpBar.name='mpbar'; c.addChild(mpBar);
 }
 
