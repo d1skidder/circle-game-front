@@ -142,73 +142,85 @@ function bakeGraphic(g, w, h, cx, cy) {
 }
 
 function makeSwordTexture(enhanced) {
-  // Super simple: rounded-tip rectangle blade + short handle
+  // Blade points RIGHT. Origin = where the two hands grip (center of handle).
+  // Total: blade 52px right, handle 18px left of origin.
   const g = new PIXI.Graphics();
   const bladeCol  = enhanced ? 0xffe07a : 0xccccdd;
-  const guardCol  = enhanced ? 0xbb8800 : 0x666677;
+  const guardCol  = enhanced ? 0xbb8800 : 0x555566;
   const handleCol = enhanced ? 0x7a3a00 : 0x2a1a0e;
 
-  // blade — thin rectangle, rounded top
-  g.lineStyle(1.5, 0x000000, 0.35);
-  g.beginFill(bladeCol, 1);
-  g.drawRoundedRect(-5, -52, 10, 56, 5);
-  g.endFill();
-  // guard — wider flat bar
-  g.lineStyle(1.5, 0x000000, 0.35);
-  g.beginFill(guardCol, 1);
-  g.drawRoundedRect(-11, 4, 22, 6, 2);
-  g.endFill();
-  // handle
-  g.lineStyle(1, 0x000000, 0.25);
-  g.beginFill(handleCol, 1);
-  g.drawRoundedRect(-4, 10, 8, 20, 2);
-  g.endFill();
-  // pommel
-  g.beginFill(guardCol, 1);
-  g.drawCircle(0, 32, 5);
+  // blade: from x=0 to x=52, thin rounded rect
+  g.lineStyle(1.5, 0x000000, 0.3);
+  g.beginFill(bladeCol);
+  g.drawRoundedRect(0, -5, 52, 10, 5);
   g.endFill();
 
-  return bakeGraphic(g, 40, 100, 20, 60);
+  // guard: vertical bar at x=0
+  g.lineStyle(1.5, 0x000000, 0.3);
+  g.beginFill(guardCol);
+  g.drawRoundedRect(-4, -11, 8, 22, 2);
+  g.endFill();
+
+  // handle: extends left from x=-4 to x=-22
+  g.lineStyle(1, 0x000000, 0.2);
+  g.beginFill(handleCol);
+  g.drawRoundedRect(-22, -4, 18, 8, 2);
+  g.endFill();
+
+  // pommel: circle at far left
+  g.lineStyle(1, 0x000000, 0.3);
+  g.beginFill(guardCol);
+  g.drawCircle(-24, 0, 5);
+  g.endFill();
+
+  // bake: canvas 90x40, origin at (26,20) so center of guard is at pixel (26,20)
+  return bakeGraphic(g, 90, 40, 26, 20);
 }
 
 function makeIceSwordTexture() {
   const g = new PIXI.Graphics();
-  g.lineStyle(1.5, 0x000000, 0.35);
-  g.beginFill(0xaaddff, 1);
-  g.drawRoundedRect(-5, -52, 10, 56, 5);
+  g.lineStyle(1.5, 0x000000, 0.3);
+  g.beginFill(0xaaddff);
+  g.drawRoundedRect(0, -5, 52, 10, 5);
   g.endFill();
-  g.lineStyle(1.5, 0x000000, 0.35);
-  g.beginFill(0x5599bb, 1);
-  g.drawRoundedRect(-11, 4, 22, 6, 2);
+  g.lineStyle(1.5, 0x000000, 0.3);
+  g.beginFill(0x4488aa);
+  g.drawRoundedRect(-4, -11, 8, 22, 2);
   g.endFill();
-  g.lineStyle(1, 0x000000, 0.25);
-  g.beginFill(0x224466, 1);
-  g.drawRoundedRect(-4, 10, 8, 20, 2);
+  g.lineStyle(1, 0x000000, 0.2);
+  g.beginFill(0x1a3a55);
+  g.drawRoundedRect(-22, -4, 18, 8, 2);
   g.endFill();
-  g.beginFill(0x5599bb, 1);
-  g.drawCircle(0, 32, 5);
+  g.lineStyle(1, 0x000000, 0.3);
+  g.beginFill(0x4488aa);
+  g.drawCircle(-24, 0, 5);
   g.endFill();
-  return bakeGraphic(g, 40, 100, 20, 60);
+  return bakeGraphic(g, 90, 40, 26, 20);
 }
 
+
 function makeRockTexture() {
+  // Simple dark-green octagon, drawn centered at (50,50) in a 100x100 canvas
   const g = new PIXI.Graphics();
-  const r = 46;
-  // shadow
-  g.beginFill(0x000000, 0.18);
-  g.drawEllipse(52, 96, r*0.9, r*0.25);
-  g.endFill();
-  // octagon
-  g.lineStyle(2.5, 0x223322, 0.9);
-  g.beginFill(0x556644, 1);
-  const sides = 8;
-  g.moveTo(52 + r * Math.cos(-Math.PI/2), 50 + r * Math.sin(-Math.PI/2));
-  for (let i = 1; i <= sides; i++) {
-    const ang = -Math.PI/2 + (i / sides) * Math.PI * 2;
-    g.lineTo(52 + r * Math.cos(ang), 50 + r * Math.sin(ang));
+  const cx = 50, cy = 50, r = 42;
+  g.lineStyle(3, 0x1a2a1a, 0.9);
+  g.beginFill(0x4a5e3a, 1);
+  g.moveTo(cx + r * Math.cos(-Math.PI/2), cy + r * Math.sin(-Math.PI/2));
+  for (let i = 1; i <= 8; i++) {
+    const ang = -Math.PI/2 + (i / 8) * Math.PI * 2;
+    g.lineTo(cx + r * Math.cos(ang), cy + r * Math.sin(ang));
   }
   g.endFill();
-  return bakeGraphic(g, 104, 104, 0, 0);
+  // simple lighter inner face
+  g.lineStyle(0);
+  g.beginFill(0x6a7e55, 0.5);
+  g.moveTo(cx + (r*0.55)*Math.cos(-Math.PI/2), cy + (r*0.55)*Math.sin(-Math.PI/2));
+  for (let i = 1; i <= 8; i++) {
+    const ang = -Math.PI/2 + (i/8)*Math.PI*2;
+    g.lineTo(cx + (r*0.55)*Math.cos(ang), cy + (r*0.55)*Math.sin(ang));
+  }
+  g.endFill();
+  return bakeGraphic(g, 100, 100, 0, 0);
 }
 
 // ═══════════════════════════════════════════════════
@@ -414,45 +426,42 @@ function updatePlayerSprite(id, p, now) {
   c.x = p.renderX; c.y = p.renderY;
 
   const facing = p.renderDir ?? p.dir;
-  // Sword swing: starts offset -PI*0.7 from facing, sweeps forward to +PI*0.3
-  // giving a clean side-to-side slash arc
-  let swingOffset = -Math.PI * 0.7; // resting position (sword held back-right)
+
+  // Swing offset: idle = sword held to the RIGHT side of facing (-PI*0.5)
+  // On hit: sweeps LEFT across body to +PI*0.5, easeOut
+  let swingOffset = -Math.PI * 0.5;
   if (p.isHitting) {
     const elapsed = now - p.timeFromLastHit;
-    const progress = Math.min(elapsed / 400, 1);
-    // easeOut swing: fast start, slow end
+    const progress = Math.min(elapsed / 380, 1);
     const eased = 1 - Math.pow(1 - progress, 2);
-    swingOffset = -Math.PI * 0.7 + eased * Math.PI * 1.0;
+    swingOffset = -Math.PI * 0.5 + eased * Math.PI;
   }
-  const a = facing + swingOffset;
+  // swordDir = direction the sword blade points (away from player)
+  const swordDir = facing + swingOffset;
 
-  // Sword held with both hands, perpendicular to facing direction
-  // Both arms reach forward toward the hilt
+  // ── SWORD ──
+  // Anchor is at center of sprite (0.5, 0.5), texture blade points RIGHT
+  // So rotation = swordDir makes blade point in swordDir
   const sword = c.getChildByName('sword');
   if (sword) {
     if (p.basicEnhanced) sword.texture = texCache.enhancedSword;
     else if (p.gameClass === 'ice') sword.texture = texCache.iceSword;
     else sword.texture = texCache.sword;
-    // sword sits in front of player, blade perpendicular to facing
-    const handDist = 26;
-    sword.x = Math.cos(a) * handDist;
-    sword.y = Math.sin(a) * handDist;
-    // blade is perpendicular: rotate 90 degrees from facing
-    sword.rotation = a; // blade runs left-right across facing direction
+    sword.x = Math.cos(swordDir) * 28;
+    sword.y = Math.sin(swordDir) * 28;
+    sword.rotation = swordDir;
     sword.scale.set(p.basicEnhanced ? 1.2 : 1.0);
   }
 
-  // arms — both reach forward toward the sword hilt
+  // ── ARMS — both reach toward the sword hilt ──
   ['arm1','arm2'].forEach((name, idx) => {
     const arm = c.getChildByName(name);
     if (!arm) return;
     arm.clear();
-    // both arms angle forward, slightly apart (one slightly left, one slightly right of center)
-    const spread = (idx === 0 ? -0.18 : 0.18);
-    const armDist = 20;
-    const ax = Math.cos(a + spread) * armDist;
-    const ay = Math.sin(a + spread) * armDist;
-    arm.lineStyle(2, 0x000000, 0.55);
+    const spread = idx === 0 ? -0.15 : 0.15;
+    const ax = Math.cos(swordDir + spread) * 18;
+    const ay = Math.sin(swordDir + spread) * 18;
+    arm.lineStyle(2, 0x000000, 0.5);
     arm.beginFill(st.arm, 1);
     arm.drawCircle(ax, ay, 7);
     arm.endFill();
@@ -536,7 +545,7 @@ function buildPlayerContainer(c, gameClass) {
   const arm2 = new PIXI.Graphics(); arm2.name='arm2'; c.addChild(arm2);
   // sword — anchor at handle bottom so it sits in hand correctly
   const sword = new PIXI.Sprite(gameClass==='ice'?texCache.iceSword:texCache.sword);
-  sword.anchor.set(0.5, 1.0); sword.name='sword'; c.addChild(sword);
+  sword.anchor.set(0.5, 0.5); sword.name='sword'; c.addChild(sword);
   // armor overlay
   const armor = new PIXI.Graphics(); armor.name='armor'; c.addChild(armor);
   // body — flat single class color, black outline only
