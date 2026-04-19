@@ -4,130 +4,196 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Arcne.io</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0614; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0f; font-family: 'Segoe UI', sans-serif; }
 
-    /* ── JOIN SCREEN ── */
-    #joinScreen {
+    #ui-layer {
+      position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    }
+
+    /* ── LOBBY ── */
+    #lobby {
       position: fixed; inset: 0; z-index: 100;
-      background: linear-gradient(to bottom right, #0b0614, #1c0f29);
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'IM Fell English SC', serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at 50% 40%, #0d1b2a 0%, #050810 100%);
+      pointer-events: all;
     }
-    .join-container {
-      text-align: center;
-      background: radial-gradient(ellipse at top, #2e2145 0%, #1a0e28 100%);
-      padding: 48px 56px; border-radius: 18px;
-      border: 2px solid #4f337a;
-      box-shadow: 0 0 40px rgba(177,135,255,0.3);
+    #lobby h1 {
+      font-size: 72px; font-weight: 900; letter-spacing: 8px;
+      background: linear-gradient(135deg, #ffffff 30%, #88aaff 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 6px; text-shadow: none;
     }
-    .join-container h1 { color: #e0d1ff; font-size: 52px; margin-bottom: 4px; letter-spacing: 6px; }
-    .join-container .subtitle { color: #7a5a99; font-size: 12px; letter-spacing: 4px; margin-bottom: 32px; }
+    #lobby .subtitle { color: #556; font-size: 14px; letter-spacing: 4px; margin-bottom: 40px; }
+
     #name-input {
-      padding: 12px 20px; width: 260px; font-size: 18px;
-      border-radius: 8px; border: none;
-      background-color: #f4ecff; color: #1a0e28;
-      margin-bottom: 16px; font-family: inherit;
-      display: block; margin: 0 auto 16px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+      color: #fff; font-size: 18px; padding: 12px 24px; border-radius: 8px;
+      outline: none; width: 280px; text-align: center; margin-bottom: 32px;
     }
-    #name-input::placeholder { color: #888; }
-    #join-btn {
-      padding: 10px 32px; font-size: 18px; border: none;
-      border-radius: 8px; background-color: #7c4dff; color: white;
-      cursor: pointer; margin-bottom: 28px; font-family: inherit;
-      transition: background-color 0.2s, box-shadow 0.2s;
-      display: block; margin: 0 auto 28px;
-    }
-    #join-btn:hover { background-color: #693ee8; box-shadow: 0 0 16px #b896ff; }
-    #join-btn:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+    #name-input::placeholder { color: #445; }
 
-    .class-selector { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+    .class-grid {
+      display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; justify-content: center;
+    }
     .class-card {
-      width: 100px; border-radius: 12px;
-      border: 2px solid #4f337a; background-color: #1c1329;
-      cursor: pointer; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-      overflow: hidden;
+      width: 130px; cursor: pointer; border-radius: 12px; overflow: hidden;
+      border: 2px solid transparent; transition: all 0.2s;
+      background: rgba(255,255,255,0.04);
     }
-    .class-card:hover { box-shadow: 0 0 10px rgba(200,170,255,0.5); transform: translateY(-2px); }
-    .class-card.selected {
-      transform: scale(1.12) translateY(-4px);
-      box-shadow: 0 0 18px var(--glow);
-      border-color: var(--glow);
-      background-color: #2e1a45;
+    .class-card:hover { transform: translateY(-4px); }
+    .class-card.selected { border-color: var(--clr); box-shadow: 0 0 20px var(--clr); }
+    .class-icon {
+      height: 100px; display: flex; align-items: center; justify-content: center;
+      font-size: 48px;
     }
-    .class-card .icon {
-      font-size: 36px; height: 70px;
+    .class-info { padding: 8px; text-align: center; }
+    .class-info h3 { color: var(--clr); font-size: 14px; font-weight: 700; letter-spacing: 2px; }
+    .class-info p { color: #667; font-size: 10px; margin-top: 4px; line-height: 1.4; }
+
+    #play-btn {
+      padding: 14px 56px; font-size: 18px; font-weight: 700; letter-spacing: 3px;
+      border: none; border-radius: 8px; cursor: pointer;
+      background: linear-gradient(135deg, #3a7bff, #7a3aff);
+      color: #fff; transition: all 0.2s; pointer-events: all;
+    }
+    #play-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px #3a7bff88; }
+    #play-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+    /* ── HUD ── */
+    #hud {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      display: none; flex-direction: column; align-items: center; gap: 8px;
+      pointer-events: none; z-index: 20;
+    }
+    .bar-row { display: flex; gap: 8px; align-items: center; }
+    .bar-label { color: #aaa; font-size: 11px; width: 14px; }
+    .bar-bg {
+      width: 220px; height: 10px; border-radius: 6px; background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.1); overflow: hidden;
+    }
+    .bar-fill { height: 100%; border-radius: 6px; transition: width 0.1s; }
+    #hp-fill { background: linear-gradient(90deg, #ff3366, #ff6688); }
+    #mp-fill { background: linear-gradient(90deg, #3366ff, #66aaff); }
+
+    .skills-row {
+      display: flex; gap: 10px; margin-top: 4px;
+    }
+    .skill-slot {
+      width: 52px; height: 52px; border-radius: 10px;
+      background: rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.15);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    .skill-slot .key { color: #888; font-size: 9px; position: absolute; top: 4px; left: 5px; }
+    .skill-slot .icon { font-size: 22px; }
+    .skill-cd-overlay {
+      position: absolute; inset: 0; background: rgba(0,0,0,0.7);
       display: flex; align-items: center; justify-content: center;
-    }
-    .class-card .label {
-      font-size: 11px; letter-spacing: 2px;
-      color: var(--glow); padding: 6px 4px;
-      font-family: 'IM Fell English SC', serif;
-      border-top: 1px solid #4f337a;
+      color: #fff; font-size: 12px; font-weight: bold;
     }
 
-    /* ── GAME SCREEN ── */
-    #gameScreen { position: fixed; inset: 0; display: none; }
-    #gameScreen canvas { display: block; }
+    /* ── LEADERBOARD ── */
+    #leaderboard {
+      position: fixed; top: 16px; right: 16px; z-index: 20;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 12px 16px; min-width: 170px;
+      display: none; pointer-events: none; backdrop-filter: blur(8px);
+    }
+    #leaderboard h4 { color: #aaa; font-size: 11px; letter-spacing: 2px; margin-bottom: 8px; }
+    .lb-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    .lb-name { color: #ddd; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-kills { color: #ffcc44; font-weight: bold; }
+    .lb-me { color: #88aaff; }
+
+    /* ── MINIMAP ── */
+    #minimap-wrap {
+      position: fixed; bottom: 16px; right: 16px; z-index: 20;
+      display: none;
+    }
+    #minimap {
+      width: 140px; height: 140px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.5);
+    }
+
+    /* ── KILL FEED ── */
+    #killfeed {
+      position: fixed; top: 16px; left: 16px; z-index: 20;
+      display: none; flex-direction: column; gap: 4px; pointer-events: none;
+    }
+    .kf-msg {
+      background: rgba(0,0,0,0.55); border-radius: 6px; padding: 5px 10px;
+      font-size: 12px; color: #ccc; border-left: 3px solid #ffcc44;
+      animation: fadeout 3s forwards;
+    }
+    @keyframes fadeout { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
 
     /* ── DEATH SCREEN ── */
-    #deathScreen {
+    #death-screen {
       position: fixed; inset: 0; z-index: 200; display: none;
-      background: rgba(0,0,0,0.85); flex-direction: column;
+      background: rgba(0,0,0,0.8); flex-direction: column;
       align-items: center; justify-content: center;
-      font-family: 'IM Fell English SC', serif;
+      pointer-events: all;
     }
-    #deathScreen h2 { color: #cc2244; font-size: 56px; margin-bottom: 12px; letter-spacing: 4px; }
-    #deathScreen p  { color: #aaa; font-size: 20px; margin-bottom: 36px; }
+    #death-screen h2 { color: #ff3366; font-size: 48px; margin-bottom: 16px; }
+    #death-screen p { color: #aaa; font-size: 18px; margin-bottom: 32px; }
     #respawn-btn {
-      padding: 12px 44px; font-size: 18px; font-family: inherit;
-      border: none; border-radius: 8px; cursor: pointer;
-      background: #7c4dff; color: #fff;
-      transition: background 0.2s, box-shadow 0.2s;
+      padding: 12px 40px; font-size: 16px; font-weight: 700; border: none;
+      border-radius: 8px; cursor: pointer; background: #3a7bff; color: #fff;
     }
-    #respawn-btn:hover { background: #9b6dff; box-shadow: 0 0 16px #b896ff; }
+    #respawn-btn:hover { background: #5590ff; }
+
+    #canvas-container { width: 100vw; height: 100vh; }
+    #canvas-container canvas { display: block; }
   </style>
 </head>
 <body>
 
-<!-- JOIN -->
-<div id="joinScreen">
-  <div class="join-container">
-    <h1>Arcne</h1>
-    <div class="subtitle">IO GAME</div>
-    <input id="name-input" type="text" placeholder="Your name..." maxlength="16" />
-    <button id="join-btn" disabled>Begin</button>
-    <div class="class-selector">
-      <div class="class-card" data-class="fire" style="--glow:#ff6633">
-        <div class="icon">🔥</div><div class="label">FIRE</div>
-      </div>
-      <div class="class-card" data-class="ice" style="--glow:#88ddff">
-        <div class="icon">❄️</div><div class="label">ICE</div>
-      </div>
-      <div class="class-card" data-class="earth" style="--glow:#aabb66">
-        <div class="icon">🪨</div><div class="label">EARTH</div>
-      </div>
-      <div class="class-card" data-class="blood" style="--glow:#ff3355">
-        <div class="icon">🩸</div><div class="label">BLOOD</div>
-      </div>
-      <div class="class-card" data-class="lightning" style="--glow:#ffee44">
-        <div class="icon">⚡</div><div class="label">LIGHTNING</div>
-      </div>
-    </div>
-  </div>
+<!-- Lobby -->
+<div id="lobby">
+  <h1>ARCNE</h1>
+  <div class="subtitle">IO GAME</div>
+  <input id="name-input" type="text" placeholder="Enter your name" maxlength="16" />
+  <div class="class-grid" id="class-grid"></div>
+  <button id="play-btn" disabled>PLAY</button>
 </div>
 
-<!-- GAME -->
-<div id="gameScreen"></div>
+<!-- Game canvas -->
+<div id="canvas-container"></div>
 
-<!-- DEATH -->
-<div id="deathScreen">
+<!-- HUD -->
+<div id="hud">
+  <div class="bar-row">
+    <span class="bar-label">♥</span>
+    <div class="bar-bg"><div class="bar-fill" id="hp-fill" style="width:100%"></div></div>
+  </div>
+  <div class="bar-row">
+    <span class="bar-label">✦</span>
+    <div class="bar-bg"><div class="bar-fill" id="mp-fill" style="width:100%"></div></div>
+  </div>
+  <div class="skills-row" id="skills-row"></div>
+</div>
+
+<!-- Leaderboard -->
+<div id="leaderboard">
+  <h4>☠ KILLS</h4>
+  <div id="lb-list"></div>
+</div>
+
+<!-- Minimap -->
+<div id="minimap-wrap">
+  <canvas id="minimap" width="140" height="140"></canvas>
+</div>
+
+<!-- Kill feed -->
+<div id="killfeed"></div>
+
+<!-- Death screen -->
+<div id="death-screen">
   <h2>YOU DIED</h2>
   <p id="death-msg"></p>
-  <button id="respawn-btn">Play Again</button>
+  <button id="respawn-btn">RESPAWN</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
