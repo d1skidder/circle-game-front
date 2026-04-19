@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════
 //  ARCNE.IO  —  PixiJS WebGL frontend
-//  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
+//  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee 
 // ═══════════════════════════════════════════════════
 
 const WS_URL = 'wss://circle-game-nzws.onrender.com';
