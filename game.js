@@ -1104,9 +1104,9 @@ function triggerDeath() {
 
 // ── JOIN SCREEN ──────────────────────────────────
 let selectedClass = null;
-document.querySelectorAll('.class-icon').forEach(icon => {
+document.querySelectorAll('.class-card').forEach(icon => {
   icon.addEventListener('click', () => {
-    document.querySelectorAll('.class-icon').forEach(i => i.classList.remove('selected'));
+    document.querySelectorAll('.class-card').forEach(i => i.classList.remove('selected'));
     icon.classList.add('selected');
     selectedClass = icon.dataset.class;
     checkReady();
