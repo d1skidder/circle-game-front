@@ -19,7 +19,7 @@ const CLASS_STYLES = {
 let ws = null, myId = null, myClass = null, myName = '';
 let dead = false, killcount = 0, gameStartTime = 0;
 let players = {}, projectiles = {}, obstacles = {};
-let zoom = 1.4, direction = 0;
+let zoom = 1.1, direction = 0;
 const pressed = {};
 let lastMoveSend = 0;
 let app, worldContainer, uiContainer;
@@ -142,105 +142,73 @@ function bakeGraphic(g, w, h, cx, cy) {
 }
 
 function makeSwordTexture(enhanced) {
-  // Clean katana-style: long curved blade, simple guard, short handle
-  // Drawn pointing UP (tip at top), anchor at bottom of handle
+  // Super simple: rounded-tip rectangle blade + short handle
   const g = new PIXI.Graphics();
-  const W = 60, H = 130;
+  const bladeCol  = enhanced ? 0xffe07a : 0xccccdd;
+  const guardCol  = enhanced ? 0xbb8800 : 0x666677;
+  const handleCol = enhanced ? 0x7a3a00 : 0x2a1a0e;
 
-  // blade — slightly curved (katana feel), thin and long
-  // left edge curves inward, right edge is nearly straight
-  const bladeCol = enhanced ? 0xffe080 : 0xd8d8e8;
-  const edgeCol  = enhanced ? 0xffaa00 : 0x888899;
+  // blade — thin rectangle, rounded top
+  g.lineStyle(1.5, 0x000000, 0.35);
   g.beginFill(bladeCol, 1);
-  // tip at (0,-55), base at (~5, 30)
-  g.moveTo(0, -55);          // tip
-  g.bezierCurveTo(4, -30, 6, 0, 6, 28);   // right edge — slight curve
-  g.lineTo(3, 32);           // base-right
-  g.lineTo(-1, 28);          // base-left
-  g.bezierCurveTo(-3, 5, -1, -20, 0, -55); // left edge curves back to tip
+  g.drawRoundedRect(-5, -52, 10, 56, 5);
   g.endFill();
-  // edge highlight line down right side
-  g.lineStyle(1, edgeCol, 0.5);
-  g.moveTo(0, -55);
-  g.bezierCurveTo(3, -25, 5, 0, 5, 26);
-  g.lineStyle(0);
-  // simple crossguard — short horizontal bar
-  const guardCol = enhanced ? 0xcc9900 : 0x777788;
+  // guard — wider flat bar
+  g.lineStyle(1.5, 0x000000, 0.35);
   g.beginFill(guardCol, 1);
-  g.drawRoundedRect(-10, 28, 20, 5, 2);
+  g.drawRoundedRect(-11, 4, 22, 6, 2);
   g.endFill();
-  // handle — slim, dark
-  const handleCol = enhanced ? 0x7a3a00 : 0x3a2a1a;
+  // handle
+  g.lineStyle(1, 0x000000, 0.25);
   g.beginFill(handleCol, 1);
-  g.drawRoundedRect(-3, 33, 7, 22, 2);
+  g.drawRoundedRect(-4, 10, 8, 20, 2);
   g.endFill();
-  // wrap lines
-  g.lineStyle(1, enhanced ? 0xffcc66 : 0x666655, 0.6);
-  for (let i = 0; i < 3; i++) { g.moveTo(-3, 37 + i*6); g.lineTo(4, 37 + i*6); }
-  g.lineStyle(0);
   // pommel
   g.beginFill(guardCol, 1);
-  g.drawCircle(0.5, 57, 4);
+  g.drawCircle(0, 32, 5);
   g.endFill();
 
-  return bakeGraphic(g, W, H, W/2, 60);
+  return bakeGraphic(g, 40, 100, 20, 60);
 }
 
 function makeIceSwordTexture() {
-  // Same clean katana shape but icy blue
   const g = new PIXI.Graphics();
-  const W = 60, H = 130;
-
-  g.beginFill(0xaaeeff, 0.95);
-  g.moveTo(0, -55);
-  g.bezierCurveTo(4, -30, 6, 0, 6, 28);
-  g.lineTo(3, 32);
-  g.lineTo(-1, 28);
-  g.bezierCurveTo(-3, 5, -1, -20, 0, -55);
+  g.lineStyle(1.5, 0x000000, 0.35);
+  g.beginFill(0xaaddff, 1);
+  g.drawRoundedRect(-5, -52, 10, 56, 5);
   g.endFill();
-  // icy edge shimmer
-  g.lineStyle(1.5, 0xffffff, 0.55);
-  g.moveTo(0, -55);
-  g.bezierCurveTo(3, -25, 5, 0, 5, 26);
-  g.lineStyle(0);
-  // guard
+  g.lineStyle(1.5, 0x000000, 0.35);
   g.beginFill(0x5599bb, 1);
-  g.drawRoundedRect(-10, 28, 20, 5, 2);
+  g.drawRoundedRect(-11, 4, 22, 6, 2);
   g.endFill();
-  // handle
+  g.lineStyle(1, 0x000000, 0.25);
   g.beginFill(0x224466, 1);
-  g.drawRoundedRect(-3, 33, 7, 22, 2);
+  g.drawRoundedRect(-4, 10, 8, 20, 2);
   g.endFill();
-  g.lineStyle(1, 0x88ccee, 0.5);
-  for (let i = 0; i < 3; i++) { g.moveTo(-3, 37 + i*6); g.lineTo(4, 37 + i*6); }
-  g.lineStyle(0);
   g.beginFill(0x5599bb, 1);
-  g.drawCircle(0.5, 57, 4);
+  g.drawCircle(0, 32, 5);
   g.endFill();
-
-  return bakeGraphic(g, W, H, W/2, 60);
+  return bakeGraphic(g, 40, 100, 20, 60);
 }
 
 function makeRockTexture() {
   const g = new PIXI.Graphics();
-  g.beginFill(0x000000, 0.2);
-  g.drawEllipse(52, 90, 40, 12); g.endFill();
+  const r = 46;
+  // shadow
+  g.beginFill(0x000000, 0.18);
+  g.drawEllipse(52, 96, r*0.9, r*0.25);
+  g.endFill();
+  // octagon
+  g.lineStyle(2.5, 0x223322, 0.9);
   g.beginFill(0x556644, 1);
-  g.moveTo(50,5); g.lineTo(82,18); g.lineTo(95,45); g.lineTo(88,72);
-  g.lineTo(65,85); g.lineTo(30,82); g.lineTo(10,62); g.lineTo(12,32); g.lineTo(28,12);
-  g.closePath(); g.endFill();
-  g.beginFill(0x7a8a66, 1);
-  g.moveTo(50,10); g.lineTo(75,22); g.lineTo(70,50); g.lineTo(50,55); g.lineTo(28,45); g.lineTo(25,25);
-  g.closePath(); g.endFill();
-  g.beginFill(0x4a7a3a, 0.8);
-  g.drawEllipse(40,30,14,8); g.drawEllipse(62,55,10,6); g.endFill();
-  g.lineStyle(1.5, 0x334433, 0.7);
-  g.moveTo(50,20); g.lineTo(45,40); g.lineTo(52,55);
-  g.moveTo(65,30); g.lineTo(70,48);
-  g.lineStyle(2, 0x223322, 0.8);
-  g.moveTo(50,5); g.lineTo(82,18); g.lineTo(95,45); g.lineTo(88,72);
-  g.lineTo(65,85); g.lineTo(30,82); g.lineTo(10,62); g.lineTo(12,32); g.lineTo(28,12); g.lineTo(50,5);
-  return bakeGraphic(g, 100, 100, 0, 0);
+  const sides = 8;
+  g.moveTo(52 + r * Math.cos(-Math.PI/2), 50 + r * Math.sin(-Math.PI/2));
+  for (let i = 1; i <= sides; i++) {
+    const ang = -Math.PI/2 + (i / sides) * Math.PI * 2;
+    g.lineTo(52 + r * Math.cos(ang), 50 + r * Math.sin(ang));
+  }
+  g.endFill();
+  return bakeGraphic(g, 104, 104, 0, 0);
 }
 
 // ═══════════════════════════════════════════════════
@@ -458,32 +426,37 @@ function updatePlayerSprite(id, p, now) {
   }
   const a = facing + swingOffset;
 
-  // arms — flat color, black outline, simple
-  ['arm1','arm2'].forEach((name, idx) => {
-    const arm = c.getChildByName(name);
-    if (!arm) return;
-    arm.clear();
-    const angle = a + (idx === 0 ? -1 : 1) * (Math.PI / 4);
-    const ax = Math.cos(angle) * 21, ay = Math.sin(angle) * 21;
-    arm.lineStyle(2, 0x000000, 0.6);
-    arm.beginFill(st.arm, 1);
-    arm.drawCircle(ax, ay, 7);
-    arm.endFill();
-  });
-
-  // sword — positioned at arm extension, blade points in direction of 'a'
+  // Sword held with both hands, perpendicular to facing direction
+  // Both arms reach forward toward the hilt
   const sword = c.getChildByName('sword');
   if (sword) {
     if (p.basicEnhanced) sword.texture = texCache.enhancedSword;
     else if (p.gameClass === 'ice') sword.texture = texCache.iceSword;
     else sword.texture = texCache.sword;
-    // place sword handle at arm position
-    sword.x = Math.cos(a) * 22;
-    sword.y = Math.sin(a) * 22;
-    // blade points in direction a (tip away from player)
-    sword.rotation = a + Math.PI / 2;
+    // sword sits in front of player, blade perpendicular to facing
+    const handDist = 26;
+    sword.x = Math.cos(a) * handDist;
+    sword.y = Math.sin(a) * handDist;
+    // blade is perpendicular: rotate 90 degrees from facing
+    sword.rotation = a; // blade runs left-right across facing direction
     sword.scale.set(p.basicEnhanced ? 1.2 : 1.0);
   }
+
+  // arms — both reach forward toward the sword hilt
+  ['arm1','arm2'].forEach((name, idx) => {
+    const arm = c.getChildByName(name);
+    if (!arm) return;
+    arm.clear();
+    // both arms angle forward, slightly apart (one slightly left, one slightly right of center)
+    const spread = (idx === 0 ? -0.18 : 0.18);
+    const armDist = 20;
+    const ax = Math.cos(a + spread) * armDist;
+    const ay = Math.sin(a + spread) * armDist;
+    arm.lineStyle(2, 0x000000, 0.55);
+    arm.beginFill(st.arm, 1);
+    arm.drawCircle(ax, ay, 7);
+    arm.endFill();
+  });
 
   // aura
   const aura = c.getChildByName('aura');
