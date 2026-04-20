@@ -376,15 +376,7 @@ function buildPlayerContainer(c, gameClass) {
   // Aura — drawn at origin, behind everything
   const aura = new PIXI.Graphics(); aura.name = 'aura'; c.addChild(aura);
 
-  // Body circle — flat class color, black outline
-  const body = new PIXI.Graphics();
-  body.lineStyle(2.5, 0x000000, 0.65);
-  body.beginFill(st.body, 1);
-  body.drawCircle(0, 0, 20);
-  body.endFill();
-  body.name = 'body'; c.addChild(body);
-
-  // Arm circles — both reach forward, slightly apart on Y axis
+   // Arm circles — both reach forward, slightly apart on Y axis
   // Since sword is perpendicular, one hand grips upper handle, one lower
   const arm1 = new PIXI.Graphics();
   arm1.lineStyle(2, 0x000000, 0.5);
@@ -400,12 +392,22 @@ function buildPlayerContainer(c, gameClass) {
   arm2.endFill();
   arm2.name = 'arm2'; c.addChild(arm2);
 
+  // Body circle — flat class color, black outline
+  const body = new PIXI.Graphics();
+  body.lineStyle(2.5, 0x000000, 0.65);
+  body.beginFill(st.body, 1);
+  body.drawCircle(0, 0, 20);
+  body.endFill();
+  body.name = 'body'; c.addChild(body);
+
+ 
+
   // Sword sprite — held SIDEWAYS (perpendicular to facing)
   // The container faces the mouse, so we rotate the sword 90deg inside
   // to make it perpendicular. Blade along Y axis, handle at top.
   const sword = new PIXI.Sprite(texCache.sword);
   sword.anchor.set(0.5, 0.5);
-  sword.x = 18; sword.y = -90;   // sits in front of player
+  sword.x = 18; sword.y = 90;   // sits in front of player
   sword.scale.set(0.125);
   sword.rotation = Math.PI / 2; // rotate 90deg so blade is perpendicular to facing
   //sword.blendMode = PIXI.BLEND_MODES.ADD;
