@@ -406,7 +406,7 @@ function buildPlayerContainer(c, gameClass) {
   const sword = new PIXI.Sprite(texCache.sword);
   sword.anchor.set(0.35, 0.5); // anchor near guard so handle is behind, blade in front
   sword.x = 20; sword.y = 0;
-  sword.width = 80; sword.height = 22;
+  sword.width = 30; sword.height = 30;
   // Remove black background: use blend mode ADD or set alpha — 
   // since bg is black we can use ADD to make black transparent
   sword.blendMode = PIXI.BLEND_MODES.ADD;
