@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════
 //  ARCNE.IO  —  PixiJS WebGL frontend
-//  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee 
+//  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
 const WS_URL = 'wss://circle-game-nzws.onrender.com';
@@ -127,9 +127,10 @@ function clearScene() {
 //  TEXTURE GENERATION
 // ═══════════════════════════════════════════════════
 function generateTextures() {
-  texCache.sword         = makeSwordTexture(false);
-  texCache.enhancedSword = makeSwordTexture(true);
-  texCache.iceSword      = makeIceSwordTexture();
+  // Load sword sprite from GitHub assets
+  texCache.sword         = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/swordSprite.png');
+  texCache.enhancedSword = texCache.sword; // same for now
+  texCache.iceSword      = texCache.sword; // same for now
   texCache.rock          = makeRockTexture();
 }
 
@@ -139,63 +140,6 @@ function bakeGraphic(g, w, h, cx, cy) {
   app.renderer.render(g, { renderTexture: rt });
   g.destroy();
   return rt;
-}
-
-function makeSwordTexture(enhanced) {
-  // Blade points RIGHT. Origin = where the two hands grip (center of handle).
-  // Total: blade 52px right, handle 18px left of origin.
-  const g = new PIXI.Graphics();
-  const bladeCol  = enhanced ? 0xffe07a : 0xccccdd;
-  const guardCol  = enhanced ? 0xbb8800 : 0x555566;
-  const handleCol = enhanced ? 0x7a3a00 : 0x2a1a0e;
-
-  // blade: from x=0 to x=52, thin rounded rect
-  g.lineStyle(1.5, 0x000000, 0.3);
-  g.beginFill(bladeCol);
-  g.drawRoundedRect(0, -5, 52, 10, 5);
-  g.endFill();
-
-  // guard: vertical bar at x=0
-  g.lineStyle(1.5, 0x000000, 0.3);
-  g.beginFill(guardCol);
-  g.drawRoundedRect(-4, -11, 8, 22, 2);
-  g.endFill();
-
-  // handle: extends left from x=-4 to x=-22
-  g.lineStyle(1, 0x000000, 0.2);
-  g.beginFill(handleCol);
-  g.drawRoundedRect(-22, -4, 18, 8, 2);
-  g.endFill();
-
-  // pommel: circle at far left
-  g.lineStyle(1, 0x000000, 0.3);
-  g.beginFill(guardCol);
-  g.drawCircle(-24, 0, 5);
-  g.endFill();
-
-  // bake: canvas 90x40, origin at (26,20) so center of guard is at pixel (26,20)
-  return bakeGraphic(g, 90, 40, 26, 20);
-}
-
-function makeIceSwordTexture() {
-  const g = new PIXI.Graphics();
-  g.lineStyle(1.5, 0x000000, 0.3);
-  g.beginFill(0xaaddff);
-  g.drawRoundedRect(0, -5, 52, 10, 5);
-  g.endFill();
-  g.lineStyle(1.5, 0x000000, 0.3);
-  g.beginFill(0x4488aa);
-  g.drawRoundedRect(-4, -11, 8, 22, 2);
-  g.endFill();
-  g.lineStyle(1, 0x000000, 0.2);
-  g.beginFill(0x1a3a55);
-  g.drawRoundedRect(-22, -4, 18, 8, 2);
-  g.endFill();
-  g.lineStyle(1, 0x000000, 0.3);
-  g.beginFill(0x4488aa);
-  g.drawCircle(-24, 0, 5);
-  g.endFill();
-  return bakeGraphic(g, 90, 40, 26, 20);
 }
 
 
@@ -414,6 +358,87 @@ function gameLoop() {
 // ═══════════════════════════════════════════════════
 //  PLAYER SPRITES
 // ═══════════════════════════════════════════════════
+//
+//  MENTAL MODEL:
+//  - playerContainer rotates so +X always points toward mouse (facing direction)
+//  - In local space: +X = forward, -X = backward, +Y = right, -Y = left
+//  - Body: circle at origin (0,0)
+//  - Arm1: at ( 8, -14) — left arm (forward-left)
+//  - Arm2: at ( 8,  14) — right arm (forward-right)
+//  - Sword: held in front, centered at (32, 0), blade along +X
+//  - Swing: container.rotation animates from facing to facing+swingArc
+//
+// ═══════════════════════════════════════════════════
+
+function buildPlayerContainer(c, gameClass) {
+  const st = CLASS_STYLES[gameClass] || CLASS_STYLES.fire;
+
+  // Aura — drawn at origin, behind everything
+  const aura = new PIXI.Graphics(); aura.name = 'aura'; c.addChild(aura);
+
+  // Body circle — flat class color, black outline
+  const body = new PIXI.Graphics();
+  body.lineStyle(2.5, 0x000000, 0.65);
+  body.beginFill(st.body, 1);
+  body.drawCircle(0, 0, 20);
+  body.endFill();
+  body.name = 'body'; c.addChild(body);
+
+  // Arm circles — fixed positions in local space
+  // Left arm: slightly forward-left
+  const arm1 = new PIXI.Graphics();
+  arm1.lineStyle(2, 0x000000, 0.5);
+  arm1.beginFill(st.arm, 1);
+  arm1.drawCircle(10, -13, 7);
+  arm1.endFill();
+  arm1.name = 'arm1'; c.addChild(arm1);
+
+  // Right arm: slightly forward-right
+  const arm2 = new PIXI.Graphics();
+  arm2.lineStyle(2, 0x000000, 0.5);
+  arm2.beginFill(st.arm, 1);
+  arm2.drawCircle(10, 13, 7);
+  arm2.endFill();
+  arm2.name = 'arm2'; c.addChild(arm2);
+
+  // Sword sprite — blade points RIGHT in texture, handle on left
+  // Centered at (32, 0) so it looks held in front by both hands
+  const sword = new PIXI.Sprite(texCache.sword);
+  sword.anchor.set(0.35, 0.5); // anchor near guard so handle is behind, blade in front
+  sword.x = 20; sword.y = 0;
+  sword.width = 80; sword.height = 22;
+  // Remove black background: use blend mode ADD or set alpha — 
+  // since bg is black we can use ADD to make black transparent
+  sword.blendMode = PIXI.BLEND_MODES.ADD;
+  sword.name = 'sword'; c.addChild(sword);
+
+  // Armor overlay (invincibility)
+  const armor = new PIXI.Graphics(); armor.name = 'armor'; c.addChild(armor);
+
+  // Name tag — always screen-upright, so we'll handle in update
+  const nt = new PIXI.Text('', {
+    fontSize: 14, fill: 0xffffff, fontWeight: '700',
+    dropShadow: true, dropShadowBlur: 4, dropShadowColor: 0x000000, dropShadowDistance: 0,
+  });
+  nt.anchor.set(0.5); nt.y = -38; nt.name = 'nametag'; c.addChild(nt);
+
+  // HP bar bg + fill
+  const hpBg = new PIXI.Graphics();
+  hpBg.beginFill(0x000000, 0.5);
+  hpBg.drawRoundedRect(-26, 26, 52, 6, 3);
+  hpBg.endFill();
+  hpBg.name = 'hpbg'; c.addChild(hpBg);
+  const hpBar = new PIXI.Graphics(); hpBar.name = 'hpbar'; c.addChild(hpBar);
+
+  // MP bar bg + fill
+  const mpBg = new PIXI.Graphics();
+  mpBg.beginFill(0x000000, 0.5);
+  mpBg.drawRoundedRect(-26, 34, 52, 5, 3);
+  mpBg.endFill();
+  mpBg.name = 'mpbg'; c.addChild(mpBg);
+  const mpBar = new PIXI.Graphics(); mpBar.name = 'mpbar'; c.addChild(mpBar);
+}
+
 function updatePlayerSprite(id, p, now) {
   if (!playerContainers[id]) {
     const c = new PIXI.Container();
@@ -423,153 +448,125 @@ function updatePlayerSprite(id, p, now) {
   }
   const c = playerContainers[id];
   const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
-  c.x = p.renderX; c.y = p.renderY;
+
+  c.x = p.renderX;
+  c.y = p.renderY;
 
   const facing = p.renderDir ?? p.dir;
 
-  // Swing offset: idle = sword held to the RIGHT side of facing (-PI*0.5)
-  // On hit: sweeps LEFT across body to +PI*0.5, easeOut
-  let swingOffset = -Math.PI * 0.5;
+  // ── SWING ANIMATION ──
+  // Idle: container faces mouse (rotation = facing)
+  // Swing: smoothly rotates +PI (180°) over 380ms with easeOut
+  // This makes the sword sweep from right side all the way to left side
+  let swingAngle = 0;
   if (p.isHitting) {
     const elapsed = now - p.timeFromLastHit;
     const progress = Math.min(elapsed / 380, 1);
+    // easeOut quad: fast start, decelerates
     const eased = 1 - Math.pow(1 - progress, 2);
-    swingOffset = -Math.PI * 0.5 + eased * Math.PI;
-  }
-  // swordDir = direction the sword blade points (away from player)
-  const swordDir = facing + swingOffset;
-
-  // ── SWORD ──
-  // Anchor is at center of sprite (0.5, 0.5), texture blade points RIGHT
-  // So rotation = swordDir makes blade point in swordDir
-  const sword = c.getChildByName('sword');
-  if (sword) {
-    if (p.basicEnhanced) sword.texture = texCache.enhancedSword;
-    else if (p.gameClass === 'ice') sword.texture = texCache.iceSword;
-    else sword.texture = texCache.sword;
-    sword.x = Math.cos(swordDir) * 28;
-    sword.y = Math.sin(swordDir) * 28;
-    sword.rotation = swordDir;
-    sword.scale.set(p.basicEnhanced ? 1.2 : 1.0);
+    swingAngle = eased * Math.PI;
   }
 
-  // ── ARMS — both reach toward the sword hilt ──
-  ['arm1','arm2'].forEach((name, idx) => {
-    const arm = c.getChildByName(name);
-    if (!arm) return;
-    arm.clear();
-    const spread = idx === 0 ? -0.15 : 0.15;
-    const ax = Math.cos(swordDir + spread) * 18;
-    const ay = Math.sin(swordDir + spread) * 18;
-    arm.lineStyle(2, 0x000000, 0.5);
-    arm.beginFill(st.arm, 1);
-    arm.drawCircle(ax, ay, 7);
-    arm.endFill();
+  // Container rotation = facing direction + swing
+  c.rotation = facing + swingAngle;
+
+  // Keep nametag and HP/MP bars always upright (counter-rotate)
+  const counterRot = -(facing + swingAngle);
+  const nt = c.getChildByName('nametag');
+  if (nt) {
+    nt.rotation = counterRot;
+    let name = p.name || '?';
+    if (name.length > 18) name = name.substring(0, 18) + '…';
+    nt.text = name + (p.killcount > 0 ? ` ☠${p.killcount}` : '');
+    nt.style.fill = id === myId ? 0xaaccff : 0xffffff;
+  }
+
+  // HP/MP bars also counter-rotate and reposition above player
+  const hpBg  = c.getChildByName('hpbg');
+  const hpBar = c.getChildByName('hpbar');
+  const mpBg  = c.getChildByName('mpbg');
+  const mpBar = c.getChildByName('mpbar');
+
+  [hpBg, hpBar, mpBg, mpBar].forEach(el => {
+    if (el) el.rotation = counterRot;
   });
 
-  // aura
+  if (hpBar) {
+    hpBar.clear();
+    const pct = Math.max(0, Math.min(1, (p.renderHealth ?? p.health) / 100));
+    const col = pct > 0.6 ? 0x44ee66 : pct > 0.3 ? 0xffcc22 : 0xff2233;
+    hpBar.beginFill(col, 0.95);
+    hpBar.drawRoundedRect(-26, 26, 52 * pct, 6, 3);
+    hpBar.endFill();
+  }
+
+  if (mpBar) {
+    mpBar.clear();
+    if (id === myId) {
+      const pct = Math.max(0, Math.min(1, (p.renderMana ?? p.mana) / 100));
+      mpBar.beginFill(0x4488ff, 0.9);
+      mpBar.drawRoundedRect(-26, 34, 52 * pct, 5, 3);
+      mpBar.endFill();
+    }
+  }
+
+  // ── SWORD SCALE for enhanced ──
+  const sword = c.getChildByName('sword');
+  if (sword) {
+    sword.scale.x = p.basicEnhanced ? 1.25 : 1.0;
+  }
+
+  // ── AURA (frenzy / lightning speed) ──
   const aura = c.getChildByName('aura');
   if (aura) {
     aura.clear();
     if (p.isFrenzy) {
-      const r = 42 + Math.sin(now/130)*5;
-      aura.lineStyle(2,0xff0033,0.6); aura.drawCircle(0,0,r);
-      aura.lineStyle(1,0xff0033,0.3); aura.drawCircle(0,0,r+7);
-      aura.beginFill(0xff0033,0.1); aura.drawCircle(0,0,r); aura.endFill();
+      const r = 42 + Math.sin(now / 130) * 5;
+      aura.lineStyle(2, 0xff0033, 0.6); aura.drawCircle(0, 0, r);
+      aura.lineStyle(1, 0xff0033, 0.3); aura.drawCircle(0, 0, r + 7);
+      aura.beginFill(0xff0033, 0.1); aura.drawCircle(0, 0, r); aura.endFill();
     } else if (p.isLightningSpeed) {
-      const r = 42 + Math.sin(now/130)*5;
-      aura.lineStyle(2,0xffee22,0.7); aura.drawCircle(0,0,r);
-      aura.lineStyle(1,0xffffff,0.3); aura.drawCircle(0,0,r+5);
-      aura.beginFill(0xffee22,0.12); aura.drawCircle(0,0,r); aura.endFill();
-      aura.lineStyle(1.5,0xffffff,0.5);
-      for (let i=0;i<6;i++){const ang=now/200+i*Math.PI/3;aura.moveTo(Math.cos(ang)*(r-4),Math.sin(ang)*(r-4));aura.lineTo(Math.cos(ang)*(r+6),Math.sin(ang)*(r+6));}
+      const r = 42 + Math.sin(now / 130) * 5;
+      aura.lineStyle(2, 0xffee22, 0.7); aura.drawCircle(0, 0, r);
+      aura.lineStyle(1, 0xffffff, 0.3); aura.drawCircle(0, 0, r + 5);
+      aura.beginFill(0xffee22, 0.12); aura.drawCircle(0, 0, r); aura.endFill();
+      aura.lineStyle(1.5, 0xffffff, 0.5);
+      for (let i = 0; i < 6; i++) {
+        const ang = now / 200 + i * Math.PI / 3;
+        aura.moveTo(Math.cos(ang) * (r - 4), Math.sin(ang) * (r - 4));
+        aura.lineTo(Math.cos(ang) * (r + 6), Math.sin(ang) * (r + 6));
+      }
     }
   }
 
-  // armor
+  // ── ARMOR (invincible) ──
   const armor = c.getChildByName('armor');
   if (armor) {
     armor.clear();
     if (p.isInvincible) {
-      const t2 = now/600;
-      armor.lineStyle(3,0xaaaaaa,0.7); armor.drawCircle(0,0,28);
-      armor.lineStyle(2,0x888888,0.5); armor.drawCircle(0,0,33);
-      for (let i=0;i<6;i++){
-        const ang=t2+i*Math.PI/3;
-        armor.lineStyle(0); armor.beginFill(0xbbbbcc,0.55);
-        armor.moveTo(Math.cos(ang)*22,Math.sin(ang)*22);
-        armor.lineTo(Math.cos(ang+0.4)*32,Math.sin(ang+0.4)*32);
-        armor.lineTo(Math.cos(ang+0.55)*32,Math.sin(ang+0.55)*32);
-        armor.lineTo(Math.cos(ang+0.15)*22,Math.sin(ang+0.15)*22);
+      const t2 = now / 600;
+      armor.lineStyle(3, 0xaaaaaa, 0.7); armor.drawCircle(0, 0, 28);
+      armor.lineStyle(2, 0x888888, 0.5); armor.drawCircle(0, 0, 33);
+      for (let i = 0; i < 6; i++) {
+        const ang = t2 + i * Math.PI / 3;
+        armor.lineStyle(0); armor.beginFill(0xbbbbcc, 0.55);
+        armor.moveTo(Math.cos(ang) * 22, Math.sin(ang) * 22);
+        armor.lineTo(Math.cos(ang + 0.4) * 32, Math.sin(ang + 0.4) * 32);
+        armor.lineTo(Math.cos(ang + 0.55) * 32, Math.sin(ang + 0.55) * 32);
+        armor.lineTo(Math.cos(ang + 0.15) * 22, Math.sin(ang + 0.15) * 22);
         armor.closePath(); armor.endFill();
       }
     }
   }
 
-  // nametag
-  const nt = c.getChildByName('nametag');
-  if (nt) {
-    let name = p.name||'?'; if(name.length>18) name=name.substring(0,18)+'…';
-    nt.text = name+(p.killcount>0?` ☠${p.killcount}`:'');
-    nt.style.fill = id===myId ? 0xaaccff : 0xffffff;
-  }
-
-  // hp bar
-  const hpBar = c.getChildByName('hpbar');
-  if (hpBar) {
-    hpBar.clear();
-    const pct = Math.max(0,Math.min(1,(p.renderHealth??p.health)/100));
-    const col = pct>0.6?0x44ee66:pct>0.3?0xffcc22:0xff2233;
-    hpBar.beginFill(col,0.95); hpBar.drawRoundedRect(-26,26,52*pct,6,3); hpBar.endFill();
-  }
-
-  // mp bar (local only)
-  const mpBar = c.getChildByName('mpbar');
-  if (mpBar) {
-    mpBar.clear();
-    if (id===myId) {
-      const pct=Math.max(0,Math.min(1,(p.renderMana??p.mana)/100));
-      mpBar.beginFill(0x4488ff,0.9); mpBar.drawRoundedRect(-26,34,52*pct,5,3); mpBar.endFill();
-    }
-  }
-
-  if (id===myId) killcount = p.killcount??0;
-}
-
-function buildPlayerContainer(c, gameClass) {
-  const st = CLASS_STYLES[gameClass]||CLASS_STYLES.fire;
-  // aura behind everything
-  const aura = new PIXI.Graphics(); aura.name='aura'; c.addChild(aura);
-  // arms (drawn dynamically)
-  const arm1 = new PIXI.Graphics(); arm1.name='arm1'; c.addChild(arm1);
-  const arm2 = new PIXI.Graphics(); arm2.name='arm2'; c.addChild(arm2);
-  // sword — anchor at handle bottom so it sits in hand correctly
-  const sword = new PIXI.Sprite(gameClass==='ice'?texCache.iceSword:texCache.sword);
-  sword.anchor.set(0.5, 0.5); sword.name='sword'; c.addChild(sword);
-  // armor overlay
-  const armor = new PIXI.Graphics(); armor.name='armor'; c.addChild(armor);
-  // body — flat single class color, black outline only
-  const body = new PIXI.Graphics();
-  body.lineStyle(2.5, 0x000000, 0.7);
-  body.beginFill(st.body, 1);
-  body.drawCircle(0, 0, 20);
-  body.endFill();
-  body.name='body'; c.addChild(body);
-  // nametag
-  const nt = new PIXI.Text('',{fontSize:14,fill:0xffffff,fontWeight:'700',dropShadow:true,dropShadowBlur:4,dropShadowColor:0x000000,dropShadowDistance:0});
-  nt.anchor.set(0.5); nt.y=-38; nt.name='nametag'; c.addChild(nt);
-  // hp bg + bar
-  const hpBg = new PIXI.Graphics();
-  hpBg.beginFill(0x000000,0.5); hpBg.drawRoundedRect(-26,26,52,6,3); hpBg.endFill(); c.addChild(hpBg);
-  const hpBar = new PIXI.Graphics(); hpBar.name='hpbar'; c.addChild(hpBar);
-  // mp bg + bar
-  const mpBg = new PIXI.Graphics();
-  mpBg.beginFill(0x000000,0.5); mpBg.drawRoundedRect(-26,34,52,5,3); mpBg.endFill(); c.addChild(mpBg);
-  const mpBar = new PIXI.Graphics(); mpBar.name='mpbar'; c.addChild(mpBar);
+  if (id === myId) killcount = p.killcount ?? 0;
 }
 
 function removePlayerSprite(id) {
-  if (playerContainers[id]) { worldContainer.removeChild(playerContainers[id]); delete playerContainers[id]; }
+  if (playerContainers[id]) {
+    worldContainer.removeChild(playerContainers[id]);
+    delete playerContainers[id];
+  }
 }
 
 // ═══════════════════════════════════════════════════
