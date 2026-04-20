@@ -375,6 +375,17 @@ function buildPlayerContainer(c, gameClass) {
 
   // Aura — drawn at origin, behind everything
   const aura = new PIXI.Graphics(); aura.name = 'aura'; c.addChild(aura);
+  
+  // Sword sprite — held SIDEWAYS (perpendicular to facing)
+  // The container faces the mouse, so we rotate the sword 90deg inside
+  // to make it perpendicular. Blade along Y axis, handle at top.
+  const sword = new PIXI.Sprite(texCache.sword);
+  sword.anchor.set(0.5, 0.5);
+  sword.x = 30; sword.y = -45;   // sits in front of player
+  sword.scale.set(0.12, 0.15);
+  sword.rotation = - Math.PI / 2; // rotate 90deg so blade is perpendicular to facing
+  //sword.blendMode = PIXI.BLEND_MODES.ADD;
+  sword.name = 'sword'; c.addChild(sword);
 
    // Arm circles — both reach forward, slightly apart on Y axis
   // Since sword is perpendicular, one hand grips upper handle, one lower
@@ -402,17 +413,6 @@ function buildPlayerContainer(c, gameClass) {
 
  
 
-  // Sword sprite — held SIDEWAYS (perpendicular to facing)
-  // The container faces the mouse, so we rotate the sword 90deg inside
-  // to make it perpendicular. Blade along Y axis, handle at top.
-  const sword = new PIXI.Sprite(texCache.sword);
-  sword.anchor.set(0.5, 0.5);
-  sword.x = 18; sword.y = 90;   // sits in front of player
-  sword.scale.set(0.125);
-  sword.rotation = Math.PI / 2; // rotate 90deg so blade is perpendicular to facing
-  //sword.blendMode = PIXI.BLEND_MODES.ADD;
-  sword.name = 'sword'; c.addChild(sword);
-
   // Armor overlay (invincibility)
   const armor = new PIXI.Graphics(); armor.name = 'armor'; c.addChild(armor);
 
@@ -422,7 +422,7 @@ function buildPlayerContainer(c, gameClass) {
     dropShadow: true, dropShadowBlur: 4, dropShadowColor: 0x000000, dropShadowDistance: 0,
   });
   nt.anchor.set(0.5); nt.y = -38; nt.name = 'nametag'; c.addChild(nt);
-
+  /*
   // HP bar bg + fill
   const hpBg = new PIXI.Graphics();
   hpBg.beginFill(0x000000, 0.5);
@@ -438,6 +438,7 @@ function buildPlayerContainer(c, gameClass) {
   mpBg.endFill();
   mpBg.name = 'mpbg'; c.addChild(mpBg);
   const mpBar = new PIXI.Graphics(); mpBar.name = 'mpbar'; c.addChild(mpBar);
+  */
 }
 
 function updatePlayerSprite(id, p, now) {
@@ -455,23 +456,29 @@ function updatePlayerSprite(id, p, now) {
 
   const facing = p.renderDir ?? p.dir;
 
-  // ── SWING ANIMATION ──
-  // Idle: container faces mouse (rotation = facing)
-  // Swing: smoothly rotates +PI (180°) over 380ms with easeOut
-  // This makes the sword sweep from right side all the way to left side
-  let swingAngle = 0;
-  if (p.isHitting) {
-    const elapsed = now - p.timeFromLastHit;
-    const progress = Math.min(elapsed / 380, 1);
-    // easeOut quad: fast start, decelerates
-    const eased = 1 - Math.pow(1 - progress, 2);
-    swingAngle = eased * Math.PI * 0.1;
+  if (p.isHitting && (!p._swingStart || now - p._swingStart > 399)) {
+    p._swingStart = now;
   }
+  if (p._swingStart) {
+    const elapsed = now - p._swingStart;
+    if (elapsed < 200) {
+      p._swingAngle = (elapsed / 200) * Math.PI * 0.9;
+    } else if (elapsed < 400) {
+      p._swingAngle = ((400 - elapsed) / 200) * Math.PI * 0.9;
+    } else {
+      p._swingAngle = 0;
+      p._swingStart = null;
+    }
+  } else {
+    p._swingAngle = 0;
+  }
+  const swingAngle = p._swingAngle ?? 0;
 
   // Container rotation = facing direction + swing
   c.rotation = facing + swingAngle;
 
   // Keep nametag and HP/MP bars always upright (counter-rotate)
+  /*
   const counterRot = -(facing + swingAngle);
   const nt = c.getChildByName('nametag');
   if (nt) {
@@ -510,6 +517,7 @@ function updatePlayerSprite(id, p, now) {
       mpBar.endFill();
     }
   }
+    */
 
   // ── SWORD SCALE for enhanced ──
   //const sword = c.getChildByName('sword');
@@ -770,6 +778,48 @@ function drawUI(now, pl) {
     const kills=new PIXI.Text(`${p.killcount??0}`,{fontSize:13,fill:0xffcc44,fontWeight:'bold'});
     kills.anchor.set(1,0);kills.x=lbX+lbW-10;kills.y=lbY+28+i*26;uiContainer.addChild(kills);
   });
+  // ── PLAYER NAMETAGS + HEALTH BARS ──
+  for (const [id, p] of Object.entries(players)) {
+    const sx = p.renderX * zoom + worldContainer.x;
+    const sy = p.renderY * zoom + worldContainer.y;
+
+    // nametag
+    let name = p.name || '?';
+    if (name.length > 18) name = name.substring(0, 18) + '…';
+    const nt = new PIXI.Text(name + (p.killcount > 0 ? ` ☠${p.killcount}` : ''), {
+      fontSize: 13, fill: id === myId ? 0xaaccff : 0xffffff,
+      fontWeight: '700', dropShadow: true, dropShadowBlur: 4,
+      dropShadowColor: 0x000000, dropShadowDistance: 0,
+    });
+    nt.anchor.set(0.5);
+    nt.x = sx; nt.y = sy - 38 * zoom;
+    uiContainer.addChild(nt);
+
+    // hp bar
+    const bw = 52 * zoom, bh = 6 * zoom;
+    const bx = sx - bw / 2, by = sy + 26 * zoom;
+    const hbg = new PIXI.Graphics();
+    hbg.beginFill(0x000000, 0.5); hbg.drawRoundedRect(bx, by, bw, bh, 2); hbg.endFill();
+    uiContainer.addChild(hbg);
+    const hpct = Math.max(0, Math.min(1, (p.renderHealth ?? p.health) / 100));
+    const hfill = new PIXI.Graphics();
+    hfill.beginFill(hpct > 0.6 ? 0x44ee66 : hpct > 0.3 ? 0xffcc22 : 0xff2233, 0.95);
+    hfill.drawRoundedRect(bx, by, bw * hpct, bh, 2); hfill.endFill();
+    uiContainer.addChild(hfill);
+
+    // mp bar (local player only)
+    if (id === myId) {
+      const mby = by + bh + 2, mbh = 5 * zoom;
+      const mbg = new PIXI.Graphics();
+      mbg.beginFill(0x000000, 0.5); mbg.drawRoundedRect(bx, mby, bw, mbh, 2); mbg.endFill();
+      uiContainer.addChild(mbg);
+      const mpct = Math.max(0, Math.min(1, (p.renderMana ?? p.mana) / 100));
+      const mfill = new PIXI.Graphics();
+      mfill.beginFill(0x4488ff, 0.9);
+      mfill.drawRoundedRect(bx, mby, bw * mpct, mbh, 2); mfill.endFill();
+      uiContainer.addChild(mfill);
+    }
+  }
 }
 
 // ── DEATH ────────────────────────────────────────
