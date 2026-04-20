@@ -382,7 +382,7 @@ function buildPlayerContainer(c, gameClass) {
   const sword = new PIXI.Sprite(texCache.sword);
   sword.anchor.set(0.5, 0.5);
   sword.x = 30; sword.y = -45;   // sits in front of player
-  sword.scale.set(0.12, 0.15);
+  sword.scale.set(0.09, 0.11);
   sword.rotation = - Math.PI / 2; // rotate 90deg so blade is perpendicular to facing
   //sword.blendMode = PIXI.BLEND_MODES.ADD;
   sword.name = 'sword'; c.addChild(sword);
