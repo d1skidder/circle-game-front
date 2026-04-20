@@ -510,10 +510,8 @@ function updatePlayerSprite(id, p, now) {
   }
 
   // ── SWORD SCALE for enhanced ──
-  const sword = c.getChildByName('sword');
-  if (sword) {
-    sword.scale.x = p.basicEnhanced ? 1.25 : 1.0;
-  }
+  //const sword = c.getChildByName('sword');
+
 
   // ── AURA (frenzy / lightning speed) ──
   const aura = c.getChildByName('aura');
