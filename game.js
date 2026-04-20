@@ -406,7 +406,7 @@ function buildPlayerContainer(c, gameClass) {
   const sword = new PIXI.Sprite(texCache.sword);
   sword.anchor.set(0.5, 0.5);
   sword.x = 18; sword.y = 0;   // sits in front of player
-  sword.scale.set(0.25);
+  sword.scale.set(0.125);
   sword.rotation = Math.PI / 2; // rotate 90deg so blade is perpendicular to facing
   //sword.blendMode = PIXI.BLEND_MODES.ADD;
   sword.name = 'sword'; c.addChild(sword);
@@ -463,7 +463,7 @@ function updatePlayerSprite(id, p, now) {
     const progress = Math.min(elapsed / 380, 1);
     // easeOut quad: fast start, decelerates
     const eased = 1 - Math.pow(1 - progress, 2);
-    swingAngle = eased * Math.PI * 1.1;
+    swingAngle = eased * Math.PI * 0.1;
   }
 
   // Container rotation = facing direction + swing
