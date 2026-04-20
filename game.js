@@ -389,14 +389,14 @@ function buildPlayerContainer(c, gameClass) {
   const arm1 = new PIXI.Graphics();
   arm1.lineStyle(2, 0x000000, 0.5);
   arm1.beginFill(st.arm, 1);
-  arm1.drawCircle(18, -9, 14);  // forward, slightly up (one hand on handle)
+  arm1.drawCircle(18, -15, 7);  // forward, slightly up (one hand on handle)
   arm1.endFill();
   arm1.name = 'arm1'; c.addChild(arm1);
 
   const arm2 = new PIXI.Graphics();
   arm2.lineStyle(2, 0x000000, 0.5);
   arm2.beginFill(st.arm, 1);
-  arm2.drawCircle(18, 9, 14);   // forward, slightly down (other hand on handle)
+  arm2.drawCircle(18, 15, 7);   // forward, slightly down (other hand on handle)
   arm2.endFill();
   arm2.name = 'arm2'; c.addChild(arm2);
 
@@ -405,7 +405,7 @@ function buildPlayerContainer(c, gameClass) {
   // to make it perpendicular. Blade along Y axis, handle at top.
   const sword = new PIXI.Sprite(texCache.sword);
   sword.anchor.set(0.5, 0.5);
-  sword.x = 18; sword.y = 30;   // sits in front of player
+  sword.x = 18; sword.y = -90;   // sits in front of player
   sword.scale.set(0.125);
   sword.rotation = Math.PI / 2; // rotate 90deg so blade is perpendicular to facing
   //sword.blendMode = PIXI.BLEND_MODES.ADD;
