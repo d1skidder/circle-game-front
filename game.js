@@ -384,31 +384,30 @@ function buildPlayerContainer(c, gameClass) {
   body.endFill();
   body.name = 'body'; c.addChild(body);
 
-  // Arm circles — fixed positions in local space
-  // Left arm: slightly forward-left
+  // Arm circles — both reach forward, slightly apart on Y axis
+  // Since sword is perpendicular, one hand grips upper handle, one lower
   const arm1 = new PIXI.Graphics();
   arm1.lineStyle(2, 0x000000, 0.5);
   arm1.beginFill(st.arm, 1);
-  arm1.drawCircle(10, -13, 7);
+  arm1.drawCircle(18, -9, 7);  // forward, slightly up (one hand on handle)
   arm1.endFill();
   arm1.name = 'arm1'; c.addChild(arm1);
 
-  // Right arm: slightly forward-right
   const arm2 = new PIXI.Graphics();
   arm2.lineStyle(2, 0x000000, 0.5);
   arm2.beginFill(st.arm, 1);
-  arm2.drawCircle(10, 13, 7);
+  arm2.drawCircle(18, 9, 7);   // forward, slightly down (other hand on handle)
   arm2.endFill();
   arm2.name = 'arm2'; c.addChild(arm2);
 
-  // Sword sprite — blade points RIGHT in texture, handle on left
-  // Centered at (32, 0) so it looks held in front by both hands
+  // Sword sprite — held SIDEWAYS (perpendicular to facing)
+  // The container faces the mouse, so we rotate the sword 90deg inside
+  // to make it perpendicular. Blade along Y axis, handle at top.
   const sword = new PIXI.Sprite(texCache.sword);
-  sword.anchor.set(0.35, 0.5); // anchor near guard so handle is behind, blade in front
-  sword.x = 20; sword.y = 0;
-  sword.width = 30; sword.height = 30;
-  // Remove black background: use blend mode ADD or set alpha — 
-  // since bg is black we can use ADD to make black transparent
+  sword.anchor.set(0.5, 0.5);
+  sword.x = 18; sword.y = 0;   // sits in front of player
+  sword.width = 70; sword.height = 20;
+  sword.rotation = Math.PI / 2; // rotate 90deg so blade is perpendicular to facing
   sword.blendMode = PIXI.BLEND_MODES.ADD;
   sword.name = 'sword'; c.addChild(sword);
 
@@ -464,7 +463,7 @@ function updatePlayerSprite(id, p, now) {
     const progress = Math.min(elapsed / 380, 1);
     // easeOut quad: fast start, decelerates
     const eased = 1 - Math.pow(1 - progress, 2);
-    swingAngle = eased * Math.PI;
+    swingAngle = eased * Math.PI * 1.1;
   }
 
   // Container rotation = facing direction + swing
