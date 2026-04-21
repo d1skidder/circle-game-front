@@ -3,8 +3,8 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'wss://circle-game-nzws.onrender.com';
-const WORLD = 4000;
+const WS_URL = 'https://circle-game-5y2k.onrender.com';
+const MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
 const CLASS_STYLES = {
@@ -18,11 +18,12 @@ const CLASS_STYLES = {
 // ── STATE ────────────────────────────────────────
 let ws = null, myId = null, myClass = null, myName = '';
 let dead = false, killcount = 0, gameStartTime = 0;
+let pingIntervalId = null;
 let players = {}, projectiles = {}, obstacles = {};
 let zoom = 1.1, direction = 0;
 const pressed = {};
 let lastMoveSend = 0;
-let app, worldContainer, uiContainer;
+let app, mapContainer, uiContainer;
 let playerContainers = {}, projContainers = {}, obstacleSprites = {};
 let texCache = {};
 let pixiReady = false;
@@ -97,29 +98,33 @@ function initPixi() {
   });
   document.getElementById('gameScreen').appendChild(app.view);
 
-  worldContainer = new PIXI.Container();
+  mapContainer = new PIXI.Container();
   uiContainer    = new PIXI.Container();
-  app.stage.addChild(worldContainer, uiContainer);
+  app.stage.addChild(mapContainer, uiContainer);
 
-  // world background
+  // map background
   const bg = new PIXI.Graphics();
   bg.beginFill(0x3a8a3a);
-  bg.drawRect(0, 0, WORLD, WORLD);
+  bg.drawRect(0, 0, MAP_DIM, MAP_DIM);
   bg.endFill();
   bg.lineStyle(1, 0x2a7020, 0.4);
-  for (let x = 0; x <= WORLD; x += 100) { bg.moveTo(x,0); bg.lineTo(x,WORLD); }
-  for (let y = 0; y <= WORLD; y += 100) { bg.moveTo(0,y); bg.lineTo(WORLD,y); }
+  for (let x = 0; x <= MAP_DIM; x += 100) { bg.moveTo(x,0); bg.lineTo(x,MAP_DIM); }
+  for (let y = 0; y <= MAP_DIM; y += 100) { bg.moveTo(0,y); bg.lineTo(MAP_DIM,y); }
   bg.lineStyle(5, 0x1a4a1a, 1);
-  bg.drawRect(0, 0, WORLD, WORLD);
-  worldContainer.addChild(bg);
+  bg.drawRect(0, 0, MAP_DIM, MAP_DIM);
+  mapContainer.addChild(bg);
 
   generateTextures();
+  initUI();
   app.ticker.add(gameLoop);
 }
 
 function clearScene() {
-  if (!worldContainer) return;
-  while (worldContainer.children.length > 1) worldContainer.removeChildAt(1);
+  if (!mapContainer) return;
+  while (mapContainer.children.length > 1) {
+    const child = mapContainer.removeChildAt(1);
+    child.destroy({ children: true });
+  }
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
 }
 
@@ -198,7 +203,8 @@ function connectWS() {
     dbgSet('dbg-ws', '⬤ WebSocket: connected ✓', 'ok');
     dbgSet('dbg-id', '⬤ Player ID: joining...', 'warn');
     ws.send(JSON.stringify({ type: 'join', name: myName, class: myClass }));
-    setInterval(() => {
+    if (pingIntervalId) clearInterval(pingIntervalId);
+    pingIntervalId = setInterval(() => {
       if (ws && ws.readyState === WebSocket.OPEN) {
         pingStart = Date.now();
         ws.send(JSON.stringify({ type: 'ping' }));
@@ -222,6 +228,7 @@ function connectWS() {
 
   ws.onclose = () => {
     dbgSet('dbg-ws', '⬤ WebSocket: disconnected', 'error');
+    if (pingIntervalId) { clearInterval(pingIntervalId); pingIntervalId = null; }
   };
 }
 
@@ -342,9 +349,9 @@ function gameLoop() {
     p.renderY = lerp(p.last_y ?? p.y, p.y, t);
   }
 
-  worldContainer.scale.set(zoom);
-  worldContainer.x = app.screen.width  / 2 - pl.renderX * zoom;
-  worldContainer.y = app.screen.height / 2 - pl.renderY * zoom;
+  mapContainer.scale.set(zoom);
+  mapContainer.x = app.screen.width  / 2 - pl.renderX * zoom;
+  mapContainer.y = app.screen.height / 2 - pl.renderY * zoom;
 
   for (const [id, ob] of Object.entries(obstacles)) getOrCreateObstacle(id, ob);
   for (const [id, p]  of Object.entries(projectiles)) updateProjSprite(id, p, now);
@@ -445,7 +452,7 @@ function updatePlayerSprite(id, p, now) {
   if (!playerContainers[id]) {
     const c = new PIXI.Container();
     buildPlayerContainer(c, p.gameClass);
-    worldContainer.addChild(c);
+    mapContainer.addChild(c);
     playerContainers[id] = c;
   }
   const c = playerContainers[id];
@@ -476,52 +483,6 @@ function updatePlayerSprite(id, p, now) {
 
   // Container rotation = facing direction + swing
   c.rotation = facing + swingAngle;
-
-  // Keep nametag and HP/MP bars always upright (counter-rotate)
-  /*
-  const counterRot = -(facing + swingAngle);
-  const nt = c.getChildByName('nametag');
-  if (nt) {
-    nt.rotation = counterRot;
-    let name = p.name || '?';
-    if (name.length > 18) name = name.substring(0, 18) + '…';
-    nt.text = name + (p.killcount > 0 ? ` ☠${p.killcount}` : '');
-    nt.style.fill = id === myId ? 0xaaccff : 0xffffff;
-  }
-
-  // HP/MP bars also counter-rotate and reposition above player
-  const hpBg  = c.getChildByName('hpbg');
-  const hpBar = c.getChildByName('hpbar');
-  const mpBg  = c.getChildByName('mpbg');
-  const mpBar = c.getChildByName('mpbar');
-
-  [hpBg, hpBar, mpBg, mpBar].forEach(el => {
-    if (el) el.rotation = counterRot;
-  });
-
-  if (hpBar) {
-    hpBar.clear();
-    const pct = Math.max(0, Math.min(1, (p.renderHealth ?? p.health) / 100));
-    const col = pct > 0.6 ? 0x44ee66 : pct > 0.3 ? 0xffcc22 : 0xff2233;
-    hpBar.beginFill(col, 0.95);
-    hpBar.drawRoundedRect(-26, 26, 52 * pct, 6, 3);
-    hpBar.endFill();
-  }
-
-  if (mpBar) {
-    mpBar.clear();
-    if (id === myId) {
-      const pct = Math.max(0, Math.min(1, (p.renderMana ?? p.mana) / 100));
-      mpBar.beginFill(0x4488ff, 0.9);
-      mpBar.drawRoundedRect(-26, 34, 52 * pct, 5, 3);
-      mpBar.endFill();
-    }
-  }
-    */
-
-  // ── SWORD SCALE for enhanced ──
-  //const sword = c.getChildByName('sword');
-
 
   // ── AURA (frenzy / lightning speed) ──
   const aura = c.getChildByName('aura');
@@ -571,9 +532,11 @@ function updatePlayerSprite(id, p, now) {
 
 function removePlayerSprite(id) {
   if (playerContainers[id]) {
-    worldContainer.removeChild(playerContainers[id]);
+    playerContainers[id].destroy({ children: true });
+    mapContainer.removeChild(playerContainers[id]);
     delete playerContainers[id];
   }
+  removePlayerUI(id);
 }
 
 // ═══════════════════════════════════════════════════
@@ -582,7 +545,7 @@ function removePlayerSprite(id) {
 function getOrCreateProj(id, type, radius) {
   if (projContainers[id]) return projContainers[id];
   const c = buildProjContainer(type, radius);
-  worldContainer.addChild(c);
+  mapContainer.addChild(c);
   projContainers[id] = c;
   return c;
 }
@@ -717,7 +680,11 @@ function updateProjSprite(id, p, now) {
 }
 
 function removeProjSprite(id) {
-  if (projContainers[id]) { worldContainer.removeChild(projContainers[id]); delete projContainers[id]; }
+  if (projContainers[id]) {
+    projContainers[id].destroy({ children: true });
+    mapContainer.removeChild(projContainers[id]);
+    delete projContainers[id];
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -728,96 +695,235 @@ function getOrCreateObstacle(id, ob) {
   const s = new PIXI.Sprite(texCache.rock);
   s.anchor.set(0.5); s.width=ob.radius*2; s.height=ob.radius*2;
   s.x=ob.x; s.y=ob.y;
-  worldContainer.addChild(s);
+  mapContainer.addChild(s);
   obstacleSprites[id]=s;
 }
 
 // ═══════════════════════════════════════════════════
 //  UI
 // ═══════════════════════════════════════════════════
+
+// Persistent UI objects — created once, updated each frame
+let _ui = null;
+
+function initUI() {
+  const W = app.screen.width, H = app.screen.height;
+  const sbW = 80, sbH = 12, sbGap = 28, totalW = sbW * 3 + sbGap * 2;
+  const startX = W / 2 - totalW / 2, barY = H - 35;
+  const lbW = 200, lbX = W - lbW - 10, lbY = 10;
+  const mmSize = 180, mmX = 10, mmY = H - mmSize - 10;
+
+  const skillLabels = ['Q', 'E', 'F'].map((key, i) => {
+    const t = new PIXI.Text(key, { fontSize: 15, fill: 0xcccccc, fontWeight: '600' });
+    t.anchor.set(0.5);
+    t.x = startX + sbW / 2 + i * (sbW + sbGap);
+    t.y = barY - 18;
+    uiContainer.addChild(t);
+    return t;
+  });
+
+  const skillBgs = [0, 1, 2].map(i => {
+    const bg = new PIXI.Graphics();
+    bg.beginFill(0x000000, 0.65);
+    bg.drawRoundedRect(startX + i * (sbW + sbGap), barY, sbW, sbH, 5);
+    bg.endFill();
+    uiContainer.addChild(bg);
+    return bg;
+  });
+
+  const skillFills = [0, 1, 2].map(() => {
+    const f = new PIXI.Graphics();
+    uiContainer.addChild(f);
+    return f;
+  });
+
+  const skillOutlines = [0, 1, 2].map(i => {
+    const ol = new PIXI.Graphics();
+    ol.lineStyle(1, 0x446688, 0.6);
+    ol.drawRoundedRect(startX + i * (sbW + sbGap), barY, sbW, sbH, 5);
+    uiContainer.addChild(ol);
+    return ol;
+  });
+
+  const miniMap = new PIXI.Graphics();
+  miniMap.beginFill(0x2a5a2a, 0.5);
+  miniMap.drawRect(mmX + 1, mmY + 1, mmSize - 2, mmSize - 2);
+  miniMap.endFill();
+  uiContainer.addChild(miniMap);
+
+  const lbBg = new PIXI.Graphics();
+  uiContainer.addChild(lbBg);
+
+  const lbTitle = new PIXI.Text('☠  LEADERBOARD', { fontSize: 12, fill: 0x99aa99, fontWeight: '700' });
+  lbTitle.x = lbX + 10;
+  lbTitle.y = lbY + 8;
+  uiContainer.addChild(lbTitle);
+
+  const lbRows = Array.from({ length: 10 }, (_, i) => {
+    const row = new PIXI.Text('', { fontSize: 13, fill: 0xddeedd });
+    row.x = lbX + 10;
+    row.y = lbY + 28 + i * 26;
+    row.visible = false;
+    uiContainer.addChild(row);
+    const kills = new PIXI.Text('', { fontSize: 13, fill: 0xffcc44, fontWeight: 'bold' });
+    kills.anchor.set(1, 0);
+    kills.x = lbX + lbW - 10;
+    kills.y = lbY + 28 + i * 26;
+    kills.visible = false;
+    uiContainer.addChild(kills);
+    return { row, kills };
+  });
+
+  _ui = { skillLabels, skillBgs, skillFills, skillOutlines, miniMap, lbBg, lbTitle, lbRows,
+    sbW, sbH, sbGap, startX, barY, lbW, lbX, lbY, mmSize, mmX, mmY };
+}
+
+// Per-player nametag + bar objects
+const uiPlayerUI = {};
+
+function getOrCreatePlayerUI(id) {
+  if (uiPlayerUI[id]) return uiPlayerUI[id];
+  const nt = new PIXI.Text('', {
+    fontSize: 13, fill: 0xffffff, fontWeight: '700',
+    dropShadow: true, dropShadowBlur: 4, dropShadowColor: 0x000000, dropShadowDistance: 0,
+  });
+  nt.anchor.set(0.5);
+  uiContainer.addChild(nt);
+  const hbg = new PIXI.Graphics(); uiContainer.addChild(hbg);
+  const hfill = new PIXI.Graphics(); uiContainer.addChild(hfill);
+  const mbg = new PIXI.Graphics(); uiContainer.addChild(mbg);
+  const mfill = new PIXI.Graphics(); uiContainer.addChild(mfill);
+  uiPlayerUI[id] = { nt, hbg, hfill, mbg, mfill };
+  return uiPlayerUI[id];
+}
+
+function removePlayerUI(id) {
+  const ui = uiPlayerUI[id];
+  if (!ui) return;
+  uiContainer.removeChild(ui.nt); ui.nt.destroy({ texture: true, baseTexture: true });
+  uiContainer.removeChild(ui.hbg); ui.hbg.destroy();
+  uiContainer.removeChild(ui.hfill); ui.hfill.destroy();
+  uiContainer.removeChild(ui.mbg); ui.mbg.destroy();
+  uiContainer.removeChild(ui.mfill); ui.mfill.destroy();
+  delete uiPlayerUI[id];
+  const dot = uiMmDots[id];
+  if (dot) { uiContainer.removeChild(dot); dot.destroy(); delete uiMmDots[id]; }
+}
+
+// Per-player minimap dots
+const uiMmDots = {};
+
 function drawUI(now, pl) {
-  uiContainer.removeChildren();
-  const W=app.screen.width, H=app.screen.height;
+  if (!_ui) return;
+  const { skillFills, sbW, sbH, sbGap, startX, barY, lbBg, lbRows, lbW, lbX, lbY, mmSize, mmX, mmY } = _ui;
 
-  // skill bars
-  const sbW=80,sbH=12,sbGap=28,totalW=sbW*3+sbGap*2;
-  const startX=W/2-totalW/2, barY=H-35;
-  ['Q','E','F'].forEach((key,i)=>{
-    const t=new PIXI.Text(key,{fontSize:15,fill:0xcccccc,fontWeight:'600'});
-    t.anchor.set(0.5);t.x=startX+sbW/2+i*(sbW+sbGap);t.y=barY-18;uiContainer.addChild(t);
-  });
-  [[pl.renderSkill1cd??pl.skill1cd,0],[pl.renderSkill2cd??pl.skill2cd,1],[pl.renderSkill3cd??pl.skill3cd,2]].forEach(([cd,i])=>{
-    const x=startX+i*(sbW+sbGap);
-    const bg=new PIXI.Graphics();bg.beginFill(0x000000,0.65);bg.drawRoundedRect(x,barY,sbW,sbH,5);bg.endFill();uiContainer.addChild(bg);
-    if(cd<1){const f=new PIXI.Graphics();f.beginFill(0x00ccff,0.85);f.drawRoundedRect(x,barY,sbW*(1-cd),sbH,5);f.endFill();f.beginFill(0xffffff,0.2);f.drawRoundedRect(x,barY,sbW*(1-cd),sbH/2,5);f.endFill();uiContainer.addChild(f);}
-    const ol=new PIXI.Graphics();ol.lineStyle(1,0x446688,0.6);ol.drawRoundedRect(x,barY,sbW,sbH,5);uiContainer.addChild(ol);
+  // Skill cooldown fills — redraw geometry only, no new object
+  const cds = [pl.renderSkill1cd ?? pl.skill1cd, pl.renderSkill2cd ?? pl.skill2cd, pl.renderSkill3cd ?? pl.skill3cd];
+  cds.forEach((cd, i) => {
+    const f = skillFills[i];
+    const x = startX + i * (sbW + sbGap);
+    f.clear();
+    if (cd < 1) {
+      f.beginFill(0x00ccff, 0.85);
+      f.drawRoundedRect(x, barY, sbW * (1 - cd), sbH, 5);
+      f.endFill();
+      f.beginFill(0xffffff, 0.2);
+      f.drawRoundedRect(x, barY, sbW * (1 - cd), sbH / 2, 5);
+      f.endFill();
+    }
   });
 
-  // minimap
-  const mmSize=180,mmX=10,mmY=H-mmSize-10;
-  const mmBg=new PIXI.Graphics();mmBg.beginFill(0x000000,0.4);mmBg.lineStyle(1,0x446644,0.6);mmBg.drawRect(mmX,mmY,mmSize,mmSize);mmBg.endFill();uiContainer.addChild(mmBg);
-  const mmW=new PIXI.Graphics();mmW.beginFill(0x2a5a2a,0.5);mmW.drawRect(mmX+1,mmY+1,mmSize-2,mmSize-2);mmW.endFill();uiContainer.addChild(mmW);
-  const mmScale=mmSize/WORLD;
-  for(const [id,p] of Object.entries(players)){
-    const st=CLASS_STYLES[p.gameClass]||CLASS_STYLES.fire;
-    const dot=new PIXI.Graphics();
-    if(id===myId){dot.beginFill(0x88aaff,1);dot.drawCircle(mmX+p.renderX*mmScale,mmY+p.renderY*mmScale,4);dot.endFill();dot.lineStyle(1,0xffffff,0.7);dot.drawCircle(mmX+p.renderX*mmScale,mmY+p.renderY*mmScale,4);}
-    else{dot.beginFill(st.body,0.85);dot.drawCircle(mmX+p.renderX*mmScale,mmY+p.renderY*mmScale,3);dot.endFill();}
-    uiContainer.addChild(dot);
+  // Minimap dots — reuse per-player Graphics, clear+redraw position
+  const mmScale = mmSize / MAP_DIM;
+  for (const [id, p] of Object.entries(players)) {
+    if (!uiMmDots[id]) {
+      const dot = new PIXI.Graphics();
+      uiContainer.addChild(dot);
+      uiMmDots[id] = dot;
+    }
+    const dot = uiMmDots[id];
+    dot.clear();
+    if (id === myId) {
+      dot.beginFill(0x88aaff, 1);
+      dot.drawCircle(mmX + p.renderX * mmScale, mmY + p.renderY * mmScale, 4);
+      dot.endFill();
+      dot.lineStyle(1, 0xffffff, 0.7);
+      dot.drawCircle(mmX + p.renderX * mmScale, mmY + p.renderY * mmScale, 4);
+    } else {
+      const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
+      dot.beginFill(st.body, 0.85);
+      dot.drawCircle(mmX + p.renderX * mmScale, mmY + p.renderY * mmScale, 3);
+      dot.endFill();
+    }
   }
 
-  // leaderboard
-  const lbW=200,lbX=W-lbW-10,lbY=10;
-  const sorted=Object.entries(players).sort((a,b)=>(b[1].killcount??0)-(a[1].killcount??0)).slice(0,10);
-  const lbBg=new PIXI.Graphics();lbBg.beginFill(0x000000,0.45);lbBg.lineStyle(1,0x335533,0.5);lbBg.drawRoundedRect(lbX,lbY,lbW,30+sorted.length*26,6);lbBg.endFill();uiContainer.addChild(lbBg);
-  const lbTitle=new PIXI.Text('☠  LEADERBOARD',{fontSize:12,fill:0x99aa99,fontWeight:'700'});lbTitle.x=lbX+10;lbTitle.y=lbY+8;uiContainer.addChild(lbTitle);
-  sorted.forEach(([id,p],i)=>{
-    let name=p.name||'?';if(name.length>14)name=name.substring(0,14)+'…';
-    const row=new PIXI.Text(`${i+1}. ${name}`,{fontSize:13,fill:id===myId?0xaaccff:0xddeedd});
-    row.x=lbX+10;row.y=lbY+28+i*26;uiContainer.addChild(row);
-    const kills=new PIXI.Text(`${p.killcount??0}`,{fontSize:13,fill:0xffcc44,fontWeight:'bold'});
-    kills.anchor.set(1,0);kills.x=lbX+lbW-10;kills.y=lbY+28+i*26;uiContainer.addChild(kills);
+  // Leaderboard — update text strings (re-rasterizes only when string changes)
+  const sorted = Object.entries(players).sort((a, b) => (b[1].killcount ?? 0) - (a[1].killcount ?? 0)).slice(0, 10);
+  lbBg.clear();
+  lbBg.beginFill(0x000000, 0.45);
+  lbBg.lineStyle(1, 0x335533, 0.5);
+  lbBg.drawRoundedRect(lbX, lbY, lbW, 30 + sorted.length * 26, 6);
+  lbBg.endFill();
+  lbRows.forEach(({ row, kills }, i) => {
+    if (i < sorted.length) {
+      const [id, p] = sorted[i];
+      let name = p.name || '?';
+      if (name.length > 14) name = name.substring(0, 14) + '…';
+      const rowText = `${i + 1}. ${name}`;
+      if (row.text !== rowText) row.text = rowText;
+      row.style.fill = id === myId ? 0xaaccff : 0xddeedd;
+      const killText = `${p.killcount ?? 0}`;
+      if (kills.text !== killText) kills.text = killText;
+      row.visible = true;
+      kills.visible = true;
+    } else {
+      row.visible = false;
+      kills.visible = false;
+    }
   });
+
   // ── PLAYER NAMETAGS + HEALTH BARS ──
   for (const [id, p] of Object.entries(players)) {
-    const sx = p.renderX * zoom + worldContainer.x;
-    const sy = p.renderY * zoom + worldContainer.y;
+    const sx = p.renderX * zoom + mapContainer.x;
+    const sy = p.renderY * zoom + mapContainer.y;
+    const { nt, hbg, hfill, mbg, mfill } = getOrCreatePlayerUI(id);
 
-    // nametag
     let name = p.name || '?';
     if (name.length > 18) name = name.substring(0, 18) + '…';
-    const nt = new PIXI.Text(name + (p.killcount > 0 ? ` ☠${p.killcount}` : ''), {
-      fontSize: 13, fill: id === myId ? 0xaaccff : 0xffffff,
-      fontWeight: '700', dropShadow: true, dropShadowBlur: 4,
-      dropShadowColor: 0x000000, dropShadowDistance: 0,
-    });
-    nt.anchor.set(0.5);
-    nt.x = sx; nt.y = sy - 38 * zoom;
-    uiContainer.addChild(nt);
+    const nameText = name + (p.killcount > 0 ? ` ☠${p.killcount}` : '');
+    if (nt.text !== nameText) nt.text = nameText;
+    nt.style.fill = id === myId ? 0xaaccff : 0xffffff;
+    nt.x = sx;
+    nt.y = sy - 38 * zoom;
 
-    // hp bar
     const bw = 52 * zoom, bh = 6 * zoom;
     const bx = sx - bw / 2, by = sy + 26 * zoom;
-    const hbg = new PIXI.Graphics();
-    hbg.beginFill(0x000000, 0.5); hbg.drawRoundedRect(bx, by, bw, bh, 2); hbg.endFill();
-    uiContainer.addChild(hbg);
+    hbg.clear();
+    hbg.beginFill(0x000000, 0.5);
+    hbg.drawRoundedRect(bx, by, bw, bh, 2);
+    hbg.endFill();
     const hpct = Math.max(0, Math.min(1, (p.renderHealth ?? p.health) / 100));
-    const hfill = new PIXI.Graphics();
+    hfill.clear();
     hfill.beginFill(hpct > 0.6 ? 0x44ee66 : hpct > 0.3 ? 0xffcc22 : 0xff2233, 0.95);
-    hfill.drawRoundedRect(bx, by, bw * hpct, bh, 2); hfill.endFill();
-    uiContainer.addChild(hfill);
+    hfill.drawRoundedRect(bx, by, bw * hpct, bh, 2);
+    hfill.endFill();
 
-    // mp bar (local player only)
     if (id === myId) {
       const mby = by + bh + 2, mbh = 5 * zoom;
-      const mbg = new PIXI.Graphics();
-      mbg.beginFill(0x000000, 0.5); mbg.drawRoundedRect(bx, mby, bw, mbh, 2); mbg.endFill();
-      uiContainer.addChild(mbg);
+      mbg.clear();
+      mbg.beginFill(0x000000, 0.5);
+      mbg.drawRoundedRect(bx, mby, bw, mbh, 2);
+      mbg.endFill();
+      mbg.visible = true;
       const mpct = Math.max(0, Math.min(1, (p.renderMana ?? p.mana) / 100));
-      const mfill = new PIXI.Graphics();
+      mfill.clear();
       mfill.beginFill(0x4488ff, 0.9);
-      mfill.drawRoundedRect(bx, mby, bw * mpct, mbh, 2); mfill.endFill();
-      uiContainer.addChild(mfill);
+      mfill.drawRoundedRect(bx, mby, bw * mpct, mbh, 2);
+      mfill.endFill();
+      mfill.visible = true;
+    } else {
+      mbg.visible = false;
+      mfill.visible = false;
     }
   }
 }
