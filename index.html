@@ -74,9 +74,9 @@
 
     /* ── DEBUG OVERLAY ── */
     #debug-overlay {
-      position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+      position: fixed; top: 10px; left: 10px;
       z-index: 300; display: none;
-      flex-direction: column; align-items: center; gap: 5px;
+      flex-direction: column; align-items: flex-start; gap: 5px;
       pointer-events: none;
     }
     .debug-line {
@@ -142,7 +142,7 @@
 <!-- DEBUG OVERLAY -->
 <div id="debug-overlay">
   <div class="debug-line info" id="dbg-ws">⬤ WebSocket: connecting...</div>
-  <div class="debug-line info" id="dbg-id">⬤ Player ID: waiting...</div>
+  <div class="debug-line info" id="dbg-id">⬤ Session ID: waiting...</div>
   <div class="debug-line info" id="dbg-players">⬤ Players: 0</div>
   <div class="debug-line info" id="dbg-ping">⬤ Ping: --ms</div>
 </div>

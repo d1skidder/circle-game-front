@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'https://circle-game-5y2k.onrender.com';
+const WS_URL = 'ws://localhost:8080';
 const MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -27,6 +27,7 @@ let app, mapContainer, uiContainer;
 let playerContainers = {}, projContainers = {}, obstacleSprites = {};
 let texCache = {};
 let pixiReady = false;
+let sessionId = 0;
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 function lerpAngle(a, b, t) {
@@ -201,7 +202,7 @@ function connectWS() {
 
   ws.onopen = () => {
     dbgSet('dbg-ws', '⬤ WebSocket: connected ✓', 'ok');
-    dbgSet('dbg-id', '⬤ Player ID: joining...', 'warn');
+    dbgSet('dbg-id', '⬤ Session ID: joining...', 'warn');
     ws.send(JSON.stringify({ type: 'join', name: myName, class: myClass }));
     if (pingIntervalId) clearInterval(pingIntervalId);
     pingIntervalId = setInterval(() => {
@@ -223,7 +224,7 @@ function connectWS() {
 
   ws.onerror = () => {
     dbgSet('dbg-ws', '⬤ WebSocket: ERROR — cannot reach server', 'error');
-    dbgSet('dbg-id', '⬤ Player ID: failed', 'error');
+    dbgSet('dbg-id', '⬤ Session ID: failed', 'error');
   };
 
   ws.onclose = () => {
@@ -236,7 +237,7 @@ function handleMessage(msg) {
   const now = Date.now();
   if (msg.type === 'init') {
     myId = msg.id;
-    dbgSet('dbg-id', `⬤ Player ID: ${msg.id.substring(0,8)}...`, 'ok');
+    dbgSet('dbg-id', `⬤ Session ID: ${sessionId}`, 'ok');
   }
 
   if (msg.type === 'players') {
@@ -274,6 +275,9 @@ function handleMessage(msg) {
 
   if (msg.type === 'obstacles') {
     msg.obstacles.forEach(p => { if (!obstacles[p.id]) obstacles[p.id] = { ...p }; });
+    sessionId = msg.sessionId;
+    console.log(msg.sessionId)
+    dbgSet('dbg-id', `⬤ Session ID: ${sessionId}`, 'ok');
   }
 }
 
@@ -629,6 +633,14 @@ function buildProjContainer(type, radius) {
       sp.beginFill(0xffee88,0.4);sp.drawCircle(0,0,r*1.5);sp.endFill();
       g.addChild(sp); break;
     }
+    case 'spear': {
+      const circ=new PIXI.Graphics();
+      circ.lineStyle(2, 0x000000, 0.5);
+      circ.beginFill(0x88cc88, 0.8);
+      circ.drawCircle(0, 0, r);
+      circ.endFill();
+      g.addChild(circ); break;
+    }
     default: {
       const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();g.addChild(def);
     }
@@ -676,6 +688,7 @@ function updateProjSprite(id, p, now) {
     }
     case 'lightningbolt': c.rotation=p.dir; break;
     case 'lightningspark': c.rotation=now/100; break;
+    case 'spear': c.rotation=p.dir+Math.PI/2; break;
   }
 }
 
