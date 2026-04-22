@@ -28,6 +28,7 @@ let playerContainers = {}, projContainers = {}, obstacleSprites = {};
 let texCache = {};
 let pixiReady = false;
 let sessionId = 0;
+let gamemode = 0;
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 function lerpAngle(a, b, t) {
@@ -247,7 +248,7 @@ function handleMessage(msg) {
         players[p.id] = { ...p, renderX: p.x, renderY: p.y, renderDir: p.dir,
           renderHealth: p.health, renderMana: p.mana,
           renderSkill1cd: p.skill1cd, renderSkill2cd: p.skill2cd, renderSkill3cd: p.skill3cd,
-          lastUpdateTime: now };
+          lastUpdateTime: now, team: p.team};
       } else {
         Object.assign(players[p.id], p, { lastUpdateTime: now });
       }
@@ -277,8 +278,15 @@ function handleMessage(msg) {
   if (msg.type === 'obstacles') {
     msg.obstacles.forEach(p => { if (!obstacles[p.id]) obstacles[p.id] = { ...p }; });
     sessionId = msg.sessionId;
+    gamemode = msg.gamemode;
     console.log(msg.sessionId)
-    dbgSet('dbg-id', `⬤ Session ID: ${sessionId}`, 'ok');
+    let modeText = '';
+    if (gamemode == 0) {
+      modeText = 'Free For All';
+    } else if (gamemode == 1) {
+      modeText = 'Team Deathmatch';
+    }
+    dbgSet('dbg-id', `⬤ Session ID: ${sessionId}, Gamemode: ${modeText}`, 'ok');
   }
 }
 
@@ -557,7 +565,7 @@ function getOrCreateProj(id, type, radius) {
 
 function buildProjContainer(type, radius) {
   const r = Math.max(5, radius||10);
-  const g = new PIXI.Container();
+  const proj = new PIXI.Container();
   switch(type) {
     case 'fireball': case 'chonkyfireball': case 'clusterfireball': {
       const sc = type==='fireball'?1:type==='chonkyfireball'?1.5:2.2;
@@ -567,8 +575,8 @@ function buildProjContainer(type, radius) {
       core.beginFill(0xff4400,0.35); core.drawCircle(0,0,base*1.3); core.endFill();
       core.beginFill(0xff2200,1); core.drawCircle(0,0,base); core.endFill();
       core.beginFill(0xffdd88,0.9); core.drawCircle(0,0,base*0.45); core.endFill();
-      g.addChild(core);
-      for(let i=0;i<5;i++){const w=new PIXI.Graphics();w.name=`wisp${i}`;g.addChild(w);}
+      proj.addChild(core);
+      for(let i=0;i<5;i++){const w=new PIXI.Graphics();w.name=`wisp${i}`;proj.addChild(w);}
       break;
     }
     case 'icicle': {
@@ -578,7 +586,7 @@ function buildProjContainer(type, radius) {
       ic.beginFill(0xffffff,0.5);
       ic.moveTo(0,-r*1.8);ic.lineTo(r*0.2,-r*0.3);ic.lineTo(0,r*0.8);ic.closePath();ic.endFill();
       ic.beginFill(0x88ddff,0.2);ic.drawCircle(0,0,r*1.5);ic.endFill();
-      g.addChild(ic); break;
+      proj.addChild(ic); break;
     }
     case 'iceblade': {
       const aura2=new PIXI.Graphics();
@@ -587,17 +595,22 @@ function buildProjContainer(type, radius) {
       ring.lineStyle(1.5,0x88ddff,0.3);ring.drawCircle(0,0,r);
       const blade=new PIXI.Sprite(texCache.iceSword);
       blade.anchor.set(0.5);blade.width=r*2;blade.height=r*2;
-      g.addChild(aura2,ring,blade); break;
+      proj.addChild(aura2,ring,blade); break;
     }
     case 'snowstorm': {
       const bg2=new PIXI.Graphics();
       bg2.beginFill(0xbbddff,0.12);bg2.drawCircle(0,0,r);bg2.endFill();
       bg2.lineStyle(2,0xaaddff,0.35);bg2.drawCircle(0,0,r*0.8);
-      g.addChild(bg2);
-      for(let i=0;i<18;i++){const d=new PIXI.Graphics();d.beginFill(0xeef8ff,0.9);d.drawCircle(0,0,i%3===0?3:2);d.endFill();d.name=`dot${i}`;g.addChild(d);}
+      proj.addChild(bg2);
+      for(let i=0;i<18;i++){
+        const d=new PIXI.Graphics();d.beginFill(0xeef8ff,0.9);d.drawCircle(0,0,i%3===0?3:2);d.endFill();
+        d.name=`dot${i}`;proj.addChild(d);
+      }
       const flake=new PIXI.Graphics();flake.lineStyle(2,0xffffff,0.7);
-      for(let i=0;i<6;i++){const ang=i*Math.PI/3;flake.moveTo(0,0);flake.lineTo(Math.cos(ang)*12,Math.sin(ang)*12);}
-      flake.name='flake';g.addChild(flake); break;
+      for(let i=0;i<6;i++){
+        const ang=i*Math.PI/3;flake.moveTo(0,0);flake.lineTo(Math.cos(ang)*12,Math.sin(ang)*12);
+      }
+      flake.name='flake';proj.addChild(flake); break;
     }
     case 'bloodblade': {
       const d=new PIXI.Graphics();
@@ -606,15 +619,15 @@ function buildProjContainer(type, radius) {
       d.lineStyle(0);d.beginFill(0x880011,1);d.drawRoundedRect(-r*0.6,-r*0.5,r*1.2,r*0.35,2);d.endFill();
       d.beginFill(0x4a1010,1);d.drawRoundedRect(-r*0.2,-r*0.1,r*0.4,r*1.1,2);d.endFill();
       d.beginFill(0xff0033,0.2);d.drawEllipse(0,-r,r*0.8,r*2);d.endFill();
-      g.addChild(d); break;
+      proj.addChild(d); break;
     }
     case 'shockwave': {
-      for(let i=0;i<8;i++){const ch=new PIXI.Graphics();ch.name=`chunk${i}`;ch.beginFill(0x6a5a3a,0.8);ch.drawRoundedRect(-3,-5,6,10,2);ch.endFill();g.addChild(ch);}
-      const ring=new PIXI.Graphics();ring.name='ring';g.addChild(ring); break;
+      for(let i=0;i<8;i++){const ch=new PIXI.Graphics();ch.name=`chunk${i}`;ch.beginFill(0x6a5a3a,0.8);ch.drawRoundedRect(-3,-5,6,10,2);ch.endFill();proj.addChild(ch);}
+      const ring=new PIXI.Graphics();ring.name='ring';proj.addChild(ring); break;
     }
     case 'lightningball': {
-      for(let i=0;i<4;i++){const arc=new PIXI.Graphics();arc.name=`arc${i}`;g.addChild(arc);}
-      const core=new PIXI.Graphics();core.name='core';g.addChild(core); break;
+      for(let i=0;i<4;i++){const arc=new PIXI.Graphics();arc.name=`arc${i}`;proj.addChild(arc);}
+      const core=new PIXI.Graphics();core.name='core';proj.addChild(core); break;
     }
     case 'lightningbolt': {
       const bolt=new PIXI.Graphics();
@@ -625,14 +638,14 @@ function buildProjContainer(type, radius) {
       bolt.lineTo(r*5.5,-r*0.3);bolt.lineTo(0,r*0.5);bolt.closePath();bolt.endFill();
       bolt.beginFill(0xffee88,0.3);bolt.drawRoundedRect(-r*0.5,-r*0.7,r*15,r*1.4,r*0.7);bolt.endFill();
       bolt.beginFill(0xffffff,0.7);bolt.drawRoundedRect(0,-r*0.15,r*14,r*0.3,r*0.15);bolt.endFill();
-      g.addChild(bolt); break;
+      proj.addChild(bolt); break;
     }
     case 'lightningspark': {
       const sp=new PIXI.Graphics();
       for(let i=0;i<5;i++){const ang=(i/5)*Math.PI*2;sp.lineStyle(1.5,i%2===0?0xffee22:0xffffff,0.8);sp.moveTo(0,0);sp.lineTo(Math.cos(ang)*r*2,Math.sin(ang)*r*2);}
       sp.beginFill(0xffffff,0.9);sp.drawCircle(0,0,r*0.5);sp.endFill();
       sp.beginFill(0xffee88,0.4);sp.drawCircle(0,0,r*1.5);sp.endFill();
-      g.addChild(sp); break;
+      proj.addChild(sp); break;
     }
     case 'spear': {
       const circ=new PIXI.Graphics();
@@ -640,56 +653,138 @@ function buildProjContainer(type, radius) {
       circ.beginFill(0x88cc88, 0.8);
       circ.drawCircle(0, 0, r);
       circ.endFill();
-      g.addChild(circ); break;
+      proj.addChild(circ); break;
     }
     default: {
-      const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();g.addChild(def);
+      const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
   }
-  return g;
+  return proj;
 }
 
 function updateProjSprite(id, p, now) {
   const c = getOrCreateProj(id, p.type, p.radius);
-  c.x = p.renderX; c.y = p.renderY;
-  const r = Math.max(5, p.radius||10);
-  switch(p.type) {
-    case 'fireball': case 'chonkyfireball': case 'clusterfireball': {
+  c.x = p.renderX;
+  c.y = p.renderY;
+  const r = Math.max(5, p.radius || 10);
+
+  switch (p.type) {
+    case 'fireball':
+    case 'chonkyfireball':
+    case 'clusterfireball': {
       c.rotation = p.dir;
-      const sc = p.type==='fireball'?1:p.type==='chonkyfireball'?1.5:2.2;
-      const base=r*sc;
-      for(let i=0;i<5;i++){
-        const w=c.getChildByName(`wisp${i}`);if(!w)continue;
+      const sc   = p.type === 'fireball' ? 1 : p.type === 'chonkyfireball' ? 1.5 : 2.2;
+      const base = r * sc;
+      for (let i = 0; i < 5; i++) {
+        const w = c.getChildByName(`wisp${i}`);
+        if (!w) continue;
         w.clear();
-        const ang=now/80+i*Math.PI*2/5;
-        const wr=base*(0.5+0.5*Math.sin(now/60+i));
-        w.beginFill(0xff8800,0.55);w.drawEllipse(Math.cos(ang)*base*0.7,Math.sin(ang)*base*0.4,wr*0.5,wr*0.8);w.endFill();
+        const ang = now / 80 + i * Math.PI * 2 / 5;
+        const wr  = base * (0.5 + 0.5 * Math.sin(now / 60 + i));
+        w.beginFill(0xff8800, 0.55);
+        w.drawEllipse(Math.cos(ang) * base * 0.7, Math.sin(ang) * base * 0.4, wr * 0.5, wr * 0.8);
+        w.endFill();
       }
       break;
     }
-    case 'icicle': c.rotation=p.dir+Math.PI/2; break;
-    case 'iceblade': p._spin=(p._spin||0)+0.06; c.rotation=p._spin; break;
-    case 'bloodblade': p._spin=(p._spin||0)+0.1; c.rotation=p._spin; break;
+
+    case 'icicle':
+      c.rotation = p.dir + Math.PI / 2;
+      break;
+
+    case 'iceblade':
+      p._spin = (p._spin || 0) + 0.06;
+      c.rotation = p._spin;
+      break;
+
+    case 'bloodblade':
+      p._spin = (p._spin || 0) + 0.1;
+      c.rotation = p._spin;
+      break;
+
     case 'snowstorm': {
-      const flake=c.getChildByName('flake');if(flake)flake.rotation=now/800;
-      for(let i=0;i<18;i++){const d=c.getChildByName(`dot${i}`);if(!d)continue;const ang=now/300+i*(Math.PI*2/18);const dr=r*(0.5+0.45*((i%3)/2));d.x=Math.cos(ang)*dr;d.y=Math.sin(ang)*dr;}
+      const flake = c.getChildByName('flake');
+      if (flake) flake.rotation = now / 800;
+      for (let i = 0; i < 18; i++) {
+        const d = c.getChildByName(`dot${i}`);
+        if (!d) continue;
+        const ang = now / 300 + i * (Math.PI * 2 / 18);
+        const dr  = r * (0.5 + 0.45 * ((i % 3) / 2));
+        d.x = Math.cos(ang) * dr;
+        d.y = Math.sin(ang) * dr;
+      }
       break;
     }
+
     case 'shockwave': {
-      const ring=c.getChildByName('ring');
-      if(ring){ring.clear();ring.lineStyle(4,0x8a6a3a,0.7);ring.drawCircle(0,0,r);ring.lineStyle(2,0x6a5030,0.4);ring.drawCircle(0,0,r*1.4);ring.beginFill(0x7a6040,0.12);ring.drawCircle(0,0,r*1.4);ring.endFill();}
-      for(let i=0;i<8;i++){const ch=c.getChildByName(`chunk${i}`);if(!ch)continue;const ang=(i/8)*Math.PI*2+now/400;ch.x=Math.cos(ang)*r*1.1;ch.y=Math.sin(ang)*r*1.1;ch.rotation=ang;}
+      const ring = c.getChildByName('ring');
+      if (ring) {
+        ring.clear();
+        ring.lineStyle(4, 0x8a6a3a, 0.7);
+        ring.drawCircle(0, 0, r);
+        ring.lineStyle(2, 0x6a5030, 0.4);
+        ring.drawCircle(0, 0, r * 1.4);
+        ring.beginFill(0x7a6040, 0.12);
+        ring.drawCircle(0, 0, r * 1.4);
+        ring.endFill();
+      }
+      for (let i = 0; i < 8; i++) {
+        const ch = c.getChildByName(`chunk${i}`);
+        if (!ch) continue;
+        const ang = (i / 8) * Math.PI * 2 + now / 400;
+        ch.x        = Math.cos(ang) * r * 1.1;
+        ch.y        = Math.sin(ang) * r * 1.1;
+        ch.rotation = ang;
+      }
       break;
     }
+
     case 'lightningball': {
-      const core=c.getChildByName('core');
-      if(core){core.clear();const pulse=0.85+0.15*Math.sin(now/80);core.beginFill(0x8888ff,0.2*pulse);core.drawCircle(0,0,r*2.2*pulse);core.endFill();core.beginFill(0xaaaaff,0.5*pulse);core.drawCircle(0,0,r*1.3*pulse);core.endFill();core.beginFill(0xffffff,0.95);core.drawCircle(0,0,r*0.5);core.endFill();}
-      for(let i=0;i<4;i++){const arc=c.getChildByName(`arc${i}`);if(!arc)continue;arc.clear();arc.lineStyle(1.5,0xddddff,0.7);const sa=now/100+i*Math.PI/2;let x1=0,y1=0;for(let j=1;j<=4;j++){const jit=Math.sin(now/30+i*7+j*3)*0.5*r;const x2=Math.cos(sa+j*0.4)*r*j*0.4+jit;const y2=Math.sin(sa+j*0.4)*r*j*0.4+jit;arc.moveTo(x1,y1);arc.lineTo(x2,y2);x1=x2;y1=y2;}}
+      const core = c.getChildByName('core');
+      if (core) {
+        core.clear();
+        const pulse = 0.85 + 0.15 * Math.sin(now / 80);
+        core.beginFill(0x8888ff, 0.2 * pulse);
+        core.drawCircle(0, 0, r * 2.2 * pulse);
+        core.endFill();
+        core.beginFill(0xaaaaff, 0.5 * pulse);
+        core.drawCircle(0, 0, r * 1.3 * pulse);
+        core.endFill();
+        core.beginFill(0xffffff, 0.95);
+        core.drawCircle(0, 0, r * 0.5);
+        core.endFill();
+      }
+      for (let i = 0; i < 4; i++) {
+        const arc = c.getChildByName(`arc${i}`);
+        if (!arc) continue;
+        arc.clear();
+        arc.lineStyle(1.5, 0xddddff, 0.7);
+        const sa = now / 100 + i * Math.PI / 2;
+        let x1 = 0, y1 = 0;
+        for (let j = 1; j <= 4; j++) {
+          const jit = Math.sin(now / 30 + i * 7 + j * 3) * 0.5 * r;
+          const x2  = Math.cos(sa + j * 0.4) * r * j * 0.4 + jit;
+          const y2  = Math.sin(sa + j * 0.4) * r * j * 0.4 + jit;
+          arc.moveTo(x1, y1);
+          arc.lineTo(x2, y2);
+          x1 = x2;
+          y1 = y2;
+        }
+      }
       break;
     }
-    case 'lightningbolt': c.rotation=p.dir; break;
-    case 'lightningspark': c.rotation=now/100; break;
-    case 'spear': c.rotation=p.dir+Math.PI/2; break;
+
+    case 'lightningbolt':
+      c.rotation = p.dir;
+      break;
+
+    case 'lightningspark':
+      c.rotation = now / 100;
+      break;
+
+    case 'spear':
+      c.rotation = p.dir + Math.PI / 2;
+      break;
   }
 }
 
@@ -885,7 +980,8 @@ function drawUI(now, pl) {
       if (name.length > 14) name = name.substring(0, 14) + '…';
       const rowText = `${i + 1}. ${name}`;
       if (row.text !== rowText) row.text = rowText;
-      row.style.fill = id === myId ? 0xaaccff : 0xddeedd;
+      const isLbEnemy = gamemode === 1 && players[myId] && p.team !== players[myId].team;
+      row.style.fill = id === myId ? 0xaaccff : isLbEnemy ? 0xff4444 : 0xddeedd;
       const killText = `${p.killcount ?? 0}`;
       if (kills.text !== killText) kills.text = killText;
       row.visible = true;
@@ -906,7 +1002,9 @@ function drawUI(now, pl) {
     if (name.length > 18) name = name.substring(0, 18) + '…';
     const nameText = name + (p.killcount > 0 ? ` ☠${p.killcount}` : '');
     if (nt.text !== nameText) nt.text = nameText;
-    nt.style.fill = id === myId ? 0xaaccff : 0xffffff;
+    const isEnemy = gamemode === 1 && players[myId] && p.team !== players[myId].team;
+    const isAlly = gamemode === 1 && players[myId] && p.team === players[myId].team && id !== myId;
+    nt.style.fill = id === myId ? 0xaaccff : isEnemy ? 0xff4444 : isAlly ? 0x44ee66 : 0xffffff;
     nt.x = sx;
     nt.y = sy - 38 * zoom;
 
