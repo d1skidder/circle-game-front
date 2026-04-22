@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'ws://localhost:8080';
+const WS_URL = 'https://circle-game-5y2k.onrender.com';
 const MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
