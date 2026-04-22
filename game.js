@@ -968,7 +968,7 @@ function drawUI(now, pl) {
       dot.beginFill(st.body, 0.85);
       dot.drawCircle(mmCx, mmCy, 4);
       dot.endFill();
-      const outlineColor = isEnemy ? 0xff3333 : isAlly ? 0x88ddff : 0xff3333;
+      const outlineColor = isEnemy ? 0xff3333 : isAlly ? 0x4488cc : 0xff3333;
       dot.lineStyle(1.5, outlineColor, 1);
       dot.drawCircle(mmCx, mmCy, 4);
     }
@@ -1010,9 +1010,8 @@ function drawUI(now, pl) {
     if (name.length > 18) name = name.substring(0, 18) + '…';
     const nameText = name + (p.killcount > 0 ? ` ☠${p.killcount}` : '');
     if (nt.text !== nameText) nt.text = nameText;
-    const isEnemy = gamemode === 1 && players[myId] && p.team !== players[myId].team;
     const isAlly = gamemode === 1 && players[myId] && p.team === players[myId].team && id !== myId;
-    nt.style.fill = id === myId ? 0xaaccff : isEnemy ? 0xff4444 : isAlly ? 0x44ee66 : 0xffffff;
+    nt.style.fill = id === myId ? 0x44ee66 : isAlly ? 0xaaccff : 0xff4444;
     nt.x = sx;
     nt.y = sy - 38 * zoom;
 
