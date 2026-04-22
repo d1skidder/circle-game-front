@@ -315,7 +315,7 @@ document.addEventListener('mousedown', e => {
     sendAttack('basicMelee');
 });
 document.addEventListener('wheel', e => {
-  zoom = e.deltaY > 0 ? Math.min(2.0, zoom + 0.05) : Math.max(0.3, zoom - 0.05);
+  zoom = e.deltaY > 0 ? Math.min(2.0, zoom + 0.05) : Math.max(0.5, zoom - 0.05);
 });
 function sendAttack(move) {
   if (ws && ws.readyState === WebSocket.OPEN)
