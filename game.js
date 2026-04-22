@@ -952,17 +952,25 @@ function drawUI(now, pl) {
     }
     const dot = uiMmDots[id];
     dot.clear();
+    const mmCx = mmX + p.renderX * mmScale;
+    const mmCy = mmY + p.renderY * mmScale;
+    const isEnemy = gamemode === 1 && players[myId] && p.team !== players[myId].team;
+    const isAlly  = gamemode === 1 && players[myId] && p.team === players[myId].team && id !== myId;
     if (id === myId) {
-      dot.beginFill(0x88aaff, 1);
-      dot.drawCircle(mmX + p.renderX * mmScale, mmY + p.renderY * mmScale, 4);
+      const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
+      dot.beginFill(st.body, 0.85);
+      dot.drawCircle(mmCx, mmCy, 4);
       dot.endFill();
-      dot.lineStyle(1, 0xffffff, 0.7);
-      dot.drawCircle(mmX + p.renderX * mmScale, mmY + p.renderY * mmScale, 4);
+      dot.lineStyle(1.5, 0x44ff44, 1);
+      dot.drawCircle(mmCx, mmCy, 4);
     } else {
       const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
       dot.beginFill(st.body, 0.85);
-      dot.drawCircle(mmX + p.renderX * mmScale, mmY + p.renderY * mmScale, 3);
+      dot.drawCircle(mmCx, mmCy, 4);
       dot.endFill();
+      const outlineColor = isEnemy ? 0xff3333 : isAlly ? 0x88ddff : 0xff3333;
+      dot.lineStyle(1.5, outlineColor, 1);
+      dot.drawCircle(mmCx, mmCy, 4);
     }
   }
 
