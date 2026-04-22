@@ -42,6 +42,15 @@
     }
     #join-btn:hover { background-color: #693ee8; box-shadow: 0 0 16px #b896ff; }
     #join-btn:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+    #session-select {
+      padding: 10px 16px; width: 260px; font-size: 16px;
+      border-radius: 8px; border: none;
+      background-color: #f4ecff; color: #1a0e28;
+      font-family: inherit; display: block; margin: 0 auto 16px;
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%231a0e28' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center;
+    }
 
     .class-selector { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
     .class-card {
@@ -115,6 +124,10 @@
     <h1>Arcne</h1>
     <div class="subtitle">IO GAME</div>
     <input id="name-input" type="text" placeholder="Your name..." maxlength="16" />
+    <select id="session-select">
+      <option value="0">Session 0</option>
+      <option value="1">Session 1</option>
+    </select>
     <button id="join-btn" disabled>Begin</button>
     <div class="class-selector">
       <div class="class-card" data-class="fire" style="--glow:#ff6633">

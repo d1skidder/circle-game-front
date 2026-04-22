@@ -57,6 +57,7 @@ function initJoinScreen() {
   document.getElementById('join-btn').addEventListener('click', () => {
     myName = document.getElementById('name-input').value.trim();
     myClass = selectedClass;
+    sessionId = parseInt(document.getElementById('session-select').value, 10);
     if (!myName || !myClass) return;
     document.getElementById('joinScreen').style.display = 'none';
     document.getElementById('gameScreen').style.display = 'block';
@@ -203,7 +204,7 @@ function connectWS() {
   ws.onopen = () => {
     dbgSet('dbg-ws', '⬤ WebSocket: connected ✓', 'ok');
     dbgSet('dbg-id', '⬤ Session ID: joining...', 'warn');
-    ws.send(JSON.stringify({ type: 'join', name: myName, class: myClass }));
+    ws.send(JSON.stringify({ type: 'join', name: myName, class: myClass, session: sessionId }));
     if (pingIntervalId) clearInterval(pingIntervalId);
     pingIntervalId = setInterval(() => {
       if (ws && ws.readyState === WebSocket.OPEN) {
