@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'ws://localhost:8080';
+const WS_URL = 'https://circle-game-5y2k.onrender.com';
 const MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -24,6 +24,7 @@ let zoom = 1.1, direction = 0;
 const pressed = {};
 let lastMoveSend = 0;
 let app, mapContainer, uiContainer;
+let obstacleLayer, projLayer, playerLayer;
 let playerContainers = {}, projContainers = {}, obstacleSprites = {};
 let texCache = {};
 let pixiReady = false;
@@ -117,6 +118,11 @@ function initPixi() {
   bg.drawRect(0, 0, MAP_DIM, MAP_DIM);
   mapContainer.addChild(bg);
 
+  obstacleLayer = new PIXI.Container();
+  projLayer = new PIXI.Container();
+  playerLayer = new PIXI.Container();
+  mapContainer.addChild(projLayer, obstacleLayer, playerLayer);
+
   generateTextures();
   initUI();
   app.ticker.add(gameLoop);
@@ -128,6 +134,10 @@ function clearScene() {
     const child = mapContainer.removeChildAt(1);
     child.destroy({ children: true });
   }
+  obstacleLayer = new PIXI.Container();
+  projLayer = new PIXI.Container();
+  playerLayer = new PIXI.Container();
+  mapContainer.addChild(obstacleLayer, projLayer, playerLayer);
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
 
   // Remove stale per-player UI (nametags, health bars, minimap dots) from uiContainer
@@ -384,6 +394,7 @@ function gameLoop() {
   for (const id of Object.keys(projContainers))    { if (!projectiles[id]) removeProjSprite(id); }
   for (const [id, p]  of Object.entries(players))  updatePlayerSprite(id, p, now);
   for (const id of Object.keys(playerContainers))  { if (!players[id]) removePlayerSprite(id); }
+  
 
   drawUI(now, pl);
 }
@@ -461,7 +472,7 @@ function updatePlayerSprite(id, p, now) {
   if (!playerContainers[id]) {
     const c = new PIXI.Container();
     buildPlayerContainer(c, p.gameClass);
-    mapContainer.addChild(c);
+    playerLayer.addChild(c);
     playerContainers[id] = c;
   }
   const c = playerContainers[id];
@@ -536,13 +547,19 @@ function updatePlayerSprite(id, p, now) {
     }
   }
 
+  // ── SWORD (enhanced) ──
+  const sword = c.getChildByName('sword');
+  if (sword) {
+    sword.texture = p.basicEnhanced ? texCache.enhancedSword : texCache.sword;
+  }
+
   if (id === myId) killcount = p.killcount ?? 0;
 }
 
 function removePlayerSprite(id) {
   if (playerContainers[id]) {
     playerContainers[id].destroy({ children: true });
-    mapContainer.removeChild(playerContainers[id]);
+    playerLayer.removeChild(playerContainers[id]);
     delete playerContainers[id];
   }
   removePlayerUI(id);
@@ -554,7 +571,7 @@ function removePlayerSprite(id) {
 function getOrCreateProj(id, type, radius) {
   if (projContainers[id]) return projContainers[id];
   const c = buildProjContainer(type, radius);
-  mapContainer.addChild(c);
+  projLayer.addChild(c);
   projContainers[id] = c;
   return c;
 }
@@ -617,8 +634,33 @@ function buildProjContainer(type, radius) {
       proj.addChild(d); break;
     }
     case 'shockwave': {
-      for(let i=0;i<8;i++){const ch=new PIXI.Graphics();ch.name=`chunk${i}`;ch.beginFill(0x6a5a3a,0.8);ch.drawRoundedRect(-3,-5,6,10,2);ch.endFill();proj.addChild(ch);}
-      const ring=new PIXI.Graphics();ring.name='ring';proj.addChild(ring); break;
+      const crackPaths = [];
+      for (let i = 0; i < 6; i++) {
+        const baseAng = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
+        const pts = [{x:0,y:0}];
+        let ang = baseAng, d = 0.08 + Math.random() * 0.12;
+        for (let j = 0; j < 3 + Math.floor(Math.random() * 2); j++) {
+          ang += (Math.random() - 0.5) * 0.7;
+          d = Math.min(d + 0.18 + Math.random() * 0.14, 1.0);
+          pts.push({x: Math.cos(ang) * d, y: Math.sin(ang) * d});
+        }
+        crackPaths.push(pts);
+        if (pts.length >= 2) {
+          const mid = pts[1];
+          const bPts = [mid];
+          let ba = ang + (Math.random() > 0.5 ? 0.6 : -0.6);
+          let bd = Math.hypot(mid.x, mid.y);
+          for (let j = 0; j < 2; j++) {
+            ba += (Math.random() - 0.5) * 0.5;
+            bd = Math.min(bd + 0.14 + Math.random() * 0.1, 0.92);
+            bPts.push({x: Math.cos(ba) * bd, y: Math.sin(ba) * bd});
+          }
+          crackPaths.push(bPts);
+        }
+      }
+      const body = new PIXI.Graphics(); body.name = 'body';
+      proj._crackPaths = crackPaths;
+      proj.addChild(body); break;
     }
     case 'lightningball': {
       for(let i=0;i<4;i++){const arc=new PIXI.Graphics();arc.name=`arc${i}`;proj.addChild(arc);}
@@ -647,7 +689,7 @@ function buildProjContainer(type, radius) {
       const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
   }
-  const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.8);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
+  //const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.8);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
   return proj;
 }
 
@@ -705,25 +747,29 @@ function updateProjSprite(id, p, now) {
     }
 
     case 'shockwave': {
-      const ring = c.getChildByName('ring');
-      if (ring) {
-        ring.clear();
-        ring.lineStyle(4, 0x8a6a3a, 0.7);
-        ring.drawCircle(0, 0, r);
-        ring.lineStyle(2, 0x6a5030, 0.4);
-        ring.drawCircle(0, 0, r * 1.4);
-        ring.beginFill(0x7a6040, 0.12);
-        ring.drawCircle(0, 0, r * 1.4);
-        ring.endFill();
+      const body = c.getChildByName('body');
+      if (!body || !c._crackPaths) break;
+      body.clear();
+      const glow = 0.1 + 0.07 * Math.sin(now / 150);
+
+      body.beginFill(0x5c3d1e, 0.2);
+      body.drawCircle(0, 0, r);
+      body.endFill();
+
+      body.lineStyle(4, 0x6B4524, glow);
+      for (const path of c._crackPaths) {
+        body.moveTo(path[0].x * r, path[0].y * r);
+        for (let k = 1; k < path.length; k++) body.lineTo(path[k].x * r, path[k].y * r);
       }
-      for (let i = 0; i < 8; i++) {
-        const ch = c.getChildByName(`chunk${i}`);
-        if (!ch) continue;
-        const ang = (i / 8) * Math.PI * 2 + now / 400;
-        ch.x        = Math.cos(ang) * r * 1.1;
-        ch.y        = Math.sin(ang) * r * 1.1;
-        ch.rotation = ang;
+
+      body.lineStyle(1.5, 0x1a0800, 0.3);
+      for (const path of c._crackPaths) {
+        body.moveTo(path[0].x * r, path[0].y * r);
+        for (let k = 1; k < path.length; k++) body.lineTo(path[k].x * r, path[k].y * r);
       }
+
+      body.lineStyle(2, 0x6a4010, 0.3);
+      body.drawCircle(0, 0, r);
       break;
     }
 
@@ -776,7 +822,7 @@ function updateProjSprite(id, p, now) {
 function removeProjSprite(id) {
   if (projContainers[id]) {
     projContainers[id].destroy({ children: true });
-    mapContainer.removeChild(projContainers[id]);
+    projLayer.removeChild(projContainers[id]);
     delete projContainers[id];
   }
 }
@@ -789,7 +835,7 @@ function getOrCreateObstacle(id, ob) {
   const s = new PIXI.Sprite(texCache.rock);
   s.anchor.set(0.5); s.width=ob.radius*2; s.height=ob.radius*2;
   s.x=ob.x; s.y=ob.y;
-  mapContainer.addChild(s);
+  obstacleLayer.addChild(s);
   obstacleSprites[id]=s;
 }
 
