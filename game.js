@@ -129,6 +129,14 @@ function clearScene() {
     child.destroy({ children: true });
   }
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
+
+  // Remove stale per-player UI (nametags, health bars, minimap dots) from uiContainer
+  for (const id of Object.keys(uiPlayerUI)) removePlayerUI(id);
+  for (const id of Object.keys(uiMmDots)) {
+    uiContainer.removeChild(uiMmDots[id]);
+    uiMmDots[id].destroy();
+    delete uiMmDots[id];
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -242,6 +250,10 @@ function handleMessage(msg) {
     dbgSet('dbg-id', `⬤ Session ID: ${sessionId}`, 'ok');
   }
 
+  if (msg.type === 'death') {
+    triggerDeath();
+  }
+
   if (msg.type === 'players') {
     msg.players.forEach(p => {
       if (!players[p.id]) {
@@ -255,6 +267,7 @@ function handleMessage(msg) {
     });
     for (const id in players) {
       if (players[id].lastUpdateTime !== now) {
+        console.log(`Player ${id} died`);
         if (id === myId && !dead) triggerDeath();
         removePlayerSprite(id); delete players[id];
       }
@@ -328,7 +341,7 @@ function sendAttack(move) {
 function gameLoop() {
   const now = Date.now();
   if (!myId) return;
-  if (now - 2000 > gameStartTime && !players[myId] && !dead) { triggerDeath(); return; }
+  if (now - 100000 > gameStartTime && !players[myId] && !dead) { triggerDeath(); return; }
 
   if (now - lastMoveSend >= 50 && ws && ws.readyState === WebSocket.OPEN) {
     let x = 0, y = 0;
@@ -442,23 +455,6 @@ function buildPlayerContainer(c, gameClass) {
     dropShadow: true, dropShadowBlur: 4, dropShadowColor: 0x000000, dropShadowDistance: 0,
   });
   nt.anchor.set(0.5); nt.y = -38; nt.name = 'nametag'; c.addChild(nt);
-  /*
-  // HP bar bg + fill
-  const hpBg = new PIXI.Graphics();
-  hpBg.beginFill(0x000000, 0.5);
-  hpBg.drawRoundedRect(-26, 26, 52, 6, 3);
-  hpBg.endFill();
-  hpBg.name = 'hpbg'; c.addChild(hpBg);
-  const hpBar = new PIXI.Graphics(); hpBar.name = 'hpbar'; c.addChild(hpBar);
-
-  // MP bar bg + fill
-  const mpBg = new PIXI.Graphics();
-  mpBg.beginFill(0x000000, 0.5);
-  mpBg.drawRoundedRect(-26, 34, 52, 5, 3);
-  mpBg.endFill();
-  mpBg.name = 'mpbg'; c.addChild(mpBg);
-  const mpBar = new PIXI.Graphics(); mpBar.name = 'mpbar'; c.addChild(mpBar);
-  */
 }
 
 function updatePlayerSprite(id, p, now) {
@@ -647,14 +643,6 @@ function buildProjContainer(type, radius) {
       sp.beginFill(0xffee88,0.4);sp.drawCircle(0,0,r*1.5);sp.endFill();
       proj.addChild(sp); break;
     }
-    case 'spear': {
-      const circ=new PIXI.Graphics();
-      circ.lineStyle(2, 0x000000, 0.5);
-      circ.beginFill(0x88cc88, 0.8);
-      circ.drawCircle(0, 0, r);
-      circ.endFill();
-      proj.addChild(circ); break;
-    }
     default: {
       const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
@@ -782,9 +770,6 @@ function updateProjSprite(id, p, now) {
       c.rotation = now / 100;
       break;
 
-    case 'spear':
-      c.rotation = p.dir + Math.PI / 2;
-      break;
   }
 }
 
