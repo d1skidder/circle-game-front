@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'https://circle-game-5y2k.onrender.com';
+const WS_URL = 'ws://localhost:8080';
 const MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -145,7 +145,7 @@ function clearScene() {
 function generateTextures() {
   // Load sword sprite from GitHub assets
   texCache.sword         = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/swordSprite.png');
-  texCache.enhancedSword = texCache.sword; // same for now
+  texCache.enhancedSword = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/enhancedsword_placeholder.png'); // same for now
   texCache.iceSword      = texCache.sword; // same for now
   texCache.rock          = makeRockTexture();
 }
@@ -564,8 +564,7 @@ function buildProjContainer(type, radius) {
   const proj = new PIXI.Container();
   switch(type) {
     case 'fireball': case 'chonkyfireball': case 'clusterfireball': {
-      const sc = type==='fireball'?1:type==='chonkyfireball'?1.5:2.2;
-      const base = r*sc;
+      const base = r;
       const core = new PIXI.Graphics(); core.name='core';
       core.beginFill(0xff6600,0.2); core.drawCircle(0,0,base*1.8); core.endFill();
       core.beginFill(0xff4400,0.35); core.drawCircle(0,0,base*1.3); core.endFill();
@@ -634,6 +633,7 @@ function buildProjContainer(type, radius) {
       bolt.lineTo(r*5.5,-r*0.3);bolt.lineTo(0,r*0.5);bolt.closePath();bolt.endFill();
       bolt.beginFill(0xffee88,0.3);bolt.drawRoundedRect(-r*0.5,-r*0.7,r*15,r*1.4,r*0.7);bolt.endFill();
       bolt.beginFill(0xffffff,0.7);bolt.drawRoundedRect(0,-r*0.15,r*14,r*0.3,r*0.15);bolt.endFill();
+      bolt.x = -r*14;
       proj.addChild(bolt); break;
     }
     case 'lightningspark': {
@@ -647,6 +647,7 @@ function buildProjContainer(type, radius) {
       const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
   }
+  const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.8);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
   return proj;
 }
 
@@ -661,8 +662,7 @@ function updateProjSprite(id, p, now) {
     case 'chonkyfireball':
     case 'clusterfireball': {
       c.rotation = p.dir;
-      const sc   = p.type === 'fireball' ? 1 : p.type === 'chonkyfireball' ? 1.5 : 2.2;
-      const base = r * sc;
+      const base = r;
       for (let i = 0; i < 5; i++) {
         const w = c.getChildByName(`wisp${i}`);
         if (!w) continue;
