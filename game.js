@@ -1028,8 +1028,8 @@ function drawUI(now, pl) {
     dot.clear();
     const mmCx = mmX + p.renderX * mmScale;
     const mmCy = mmY + p.renderY * mmScale;
-    const isEnemy = gamemode === 1 && players[myId] && p.team !== players[myId].team;
-    const isAlly  = gamemode === 1 && players[myId] && p.team === players[myId].team && id !== myId;
+    const isEnemy = (gamemode === 1 || gamemode === 2) && players[myId] && p.team !== players[myId].team;
+    const isAlly  = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
     if (id === myId) {
       const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
       dot.beginFill(st.body, 0.85);
@@ -1079,7 +1079,7 @@ function drawUI(now, pl) {
       if (name.length > 14) name = name.substring(0, 14) + '…';
       const rowText = `${i + 1}. ${name}`;
       if (row.text !== rowText) row.text = rowText;
-      const isLbEnemy = gamemode === 1 && players[myId] && p.team !== players[myId].team;
+      const isLbEnemy = (gamemode === 1 || gamemode === 2) && players[myId] && p.team !== players[myId].team;
       row.style.fill = id === myId ? 0xaaccff : isLbEnemy ? 0xff4444 : 0xddeedd;
       const killText = `${p.killcount ?? 0}`;
       if (kills.text !== killText) kills.text = killText;
@@ -1101,7 +1101,7 @@ function drawUI(now, pl) {
     if (name.length > 18) name = name.substring(0, 18) + '…';
     const nameText = name + (p.killcount > 0 ? ` ☠${p.killcount}` : '');
     if (nt.text !== nameText) nt.text = nameText;
-    const isAlly = gamemode === 1 && players[myId] && p.team === players[myId].team && id !== myId;
+    const isAlly = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
     nt.style.fill = id === myId ? 0x44ee66 : isAlly ? 0xaaccff : 0xff4444;
     nt.x = sx;
     nt.y = sy - 38 * zoom;
