@@ -3,8 +3,8 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'https://circle-game-5y2k.onrender.com';
-const MAP_DIM = 4000;
+const WS_URL = 'ws://localhost:8080';
+let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
 const CLASS_STYLES = {
@@ -20,11 +20,14 @@ let ws = null, myId = null, myClass = null, myName = '';
 let dead = false, killcount = 0, gameStartTime = 0;
 let pingIntervalId = null;
 let players = {}, projectiles = {}, obstacles = {};
+let capturePoint = {}, cpRenderPercent = 0;
 let zoom = 1.1, direction = 0;
 const pressed = {};
 let lastMoveSend = 0;
 let app, mapContainer, uiContainer;
 let obstacleLayer, projLayer, playerLayer;
+let mapBg = null;
+let capturePointGraphic = null;
 let playerContainers = {}, projContainers = {}, obstacleSprites = {};
 let texCache = {};
 let pixiReady = false;
@@ -91,6 +94,19 @@ function checkReady() {
 // ═══════════════════════════════════════════════════
 //  PIXI INIT
 // ═══════════════════════════════════════════════════
+function drawMapBg() {
+  if (!mapBg) return;
+  mapBg.clear();
+  mapBg.beginFill(0x3a8a3a);
+  mapBg.drawRect(0, 0, MAP_DIM, MAP_DIM);
+  mapBg.endFill();
+  mapBg.lineStyle(1, 0x2a7020, 0.4);
+  for (let x = 0; x <= MAP_DIM; x += 100) { mapBg.moveTo(x,0); mapBg.lineTo(x,MAP_DIM); }
+  for (let y = 0; y <= MAP_DIM; y += 100) { mapBg.moveTo(0,y); mapBg.lineTo(MAP_DIM,y); }
+  mapBg.lineStyle(5, 0x1a4a1a, 1);
+  mapBg.drawRect(0, 0, MAP_DIM, MAP_DIM);
+}
+
 function initPixi() {
   pixiReady = true;
   app = new PIXI.Application({
@@ -107,21 +123,15 @@ function initPixi() {
   app.stage.addChild(mapContainer, uiContainer);
 
   // map background
-  const bg = new PIXI.Graphics();
-  bg.beginFill(0x3a8a3a);
-  bg.drawRect(0, 0, MAP_DIM, MAP_DIM);
-  bg.endFill();
-  bg.lineStyle(1, 0x2a7020, 0.4);
-  for (let x = 0; x <= MAP_DIM; x += 100) { bg.moveTo(x,0); bg.lineTo(x,MAP_DIM); }
-  for (let y = 0; y <= MAP_DIM; y += 100) { bg.moveTo(0,y); bg.lineTo(MAP_DIM,y); }
-  bg.lineStyle(5, 0x1a4a1a, 1);
-  bg.drawRect(0, 0, MAP_DIM, MAP_DIM);
-  mapContainer.addChild(bg);
+  mapBg = new PIXI.Graphics();
+  mapContainer.addChild(mapBg);
+  drawMapBg();
 
   obstacleLayer = new PIXI.Container();
   projLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
-  mapContainer.addChild(projLayer, obstacleLayer, playerLayer);
+  capturePointGraphic = new PIXI.Graphics();
+  mapContainer.addChild(projLayer, obstacleLayer, playerLayer, capturePointGraphic);
 
   generateTextures();
   initUI();
@@ -137,7 +147,8 @@ function clearScene() {
   obstacleLayer = new PIXI.Container();
   projLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
-  mapContainer.addChild(obstacleLayer, projLayer, playerLayer);
+  capturePointGraphic = new PIXI.Graphics();
+  mapContainer.addChild(projLayer, obstacleLayer, playerLayer, capturePointGraphic);
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
 
   // Remove stale per-player UI (nametags, health bars, minimap dots) from uiContainer
@@ -298,18 +309,27 @@ function handleMessage(msg) {
     }
   }
 
-  if (msg.type === 'obstacles') {
+  if (msg.type === 'gameStart') {
+    console.log(msg);
     msg.obstacles.forEach(p => { if (!obstacles[p.id]) obstacles[p.id] = { ...p }; });
     sessionId = msg.sessionId;
     gamemode = msg.gamemode;
+    MAP_DIM = msg.mapDim || MAP_DIM;
+    drawMapBg();
     console.log(msg.sessionId)
     let modeText = '';
     if (gamemode == 0) {
       modeText = 'Free For All';
     } else if (gamemode == 1) {
       modeText = 'Team Deathmatch';
+    } else if (gamemode == 2) {
+      modeText = 'Capture Point';
     }
     dbgSet('dbg-id', `⬤ Session ID: ${sessionId}, Gamemode: ${modeText}`, 'ok');
+  }
+
+  if (msg.type === 'capturepoint') {
+    capturePoint = {"x": msg.x, "y": msg.y, "radius": msg.radius, "captureState": msg.captureState, "text": msg.text, "percentage": msg.percentage};
   }
 }
 
@@ -394,7 +414,14 @@ function gameLoop() {
   for (const id of Object.keys(projContainers))    { if (!projectiles[id]) removeProjSprite(id); }
   for (const [id, p]  of Object.entries(players))  updatePlayerSprite(id, p, now);
   for (const id of Object.keys(playerContainers))  { if (!players[id]) removePlayerSprite(id); }
-  
+
+  capturePointGraphic.clear();
+  if (gamemode === 2 && capturePoint.radius) {
+    capturePointGraphic.lineStyle(3, 0xffffff, 0.9);
+    capturePointGraphic.beginFill(0xffffff, 0.1);
+    capturePointGraphic.drawCircle(capturePoint.x, capturePoint.y, capturePoint.radius);
+    capturePointGraphic.endFill();
+  }
 
   drawUI(now, pl);
 }
@@ -891,6 +918,9 @@ function initUI() {
   miniMap.endFill();
   uiContainer.addChild(miniMap);
 
+  const mmCpDiamond = new PIXI.Graphics();
+  uiContainer.addChild(mmCpDiamond);
+
   const lbBg = new PIXI.Graphics();
   uiContainer.addChild(lbBg);
 
@@ -914,8 +944,20 @@ function initUI() {
     return { row, kills };
   });
 
+  const cpBarW = 300, cpBarH = 22, cpBarX = W / 2 - 150, cpBarY = 14;
+  const cpBg = new PIXI.Graphics();
+  uiContainer.addChild(cpBg);
+  const cpFill = new PIXI.Graphics();
+  uiContainer.addChild(cpFill);
+  const cpText = new PIXI.Text('', { fontSize: 13, fill: 0xffffff, fontWeight: '700' });
+  cpText.anchor.set(0.5, 0.5);
+  cpText.x = W / 2;
+  cpText.y = cpBarY + cpBarH / 2;
+  uiContainer.addChild(cpText);
+
   _ui = { skillLabels, skillBgs, skillFills, skillOutlines, miniMap, lbBg, lbTitle, lbRows,
-    sbW, sbH, sbGap, startX, barY, lbW, lbX, lbY, mmSize, mmX, mmY };
+    sbW, sbH, sbGap, startX, barY, lbW, lbX, lbY, mmSize, mmX, mmY,
+    cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond };
 }
 
 // Per-player nametag + bar objects
@@ -955,7 +997,8 @@ const uiMmDots = {};
 
 function drawUI(now, pl) {
   if (!_ui) return;
-  const { skillFills, sbW, sbH, sbGap, startX, barY, lbBg, lbRows, lbW, lbX, lbY, mmSize, mmX, mmY } = _ui;
+  const { skillFills, sbW, sbH, sbGap, startX, barY, lbBg, lbRows, lbW, lbX, lbY, mmSize, mmX, mmY,
+    cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond } = _ui;
 
   // Skill cooldown fills — redraw geometry only, no new object
   const cds = [pl.renderSkill1cd ?? pl.skill1cd, pl.renderSkill2cd ?? pl.skill2cd, pl.renderSkill3cd ?? pl.skill3cd];
@@ -1003,6 +1046,23 @@ function drawUI(now, pl) {
       dot.lineStyle(1.5, outlineColor, 1);
       dot.drawCircle(mmCx, mmCy, 4);
     }
+  }
+
+  // Capture point diamond on minimap
+  mmCpDiamond.clear();
+  if (gamemode === 2 && capturePoint.radius) {
+    const mmScale = mmSize / MAP_DIM;
+    const cx = mmX + capturePoint.x * mmScale;
+    const cy = mmY + capturePoint.y * mmScale;
+    const r = 5;
+    mmCpDiamond.lineStyle(1.5, 0xffffff, 1);
+    mmCpDiamond.beginFill(0xffffff, 0.85);
+    mmCpDiamond.moveTo(cx, cy - r);
+    mmCpDiamond.lineTo(cx + r, cy);
+    mmCpDiamond.lineTo(cx, cy + r);
+    mmCpDiamond.lineTo(cx - r, cy);
+    mmCpDiamond.closePath();
+    mmCpDiamond.endFill();
   }
 
   // Leaderboard — update text strings (re-rasterizes only when string changes)
@@ -1075,6 +1135,41 @@ function drawUI(now, pl) {
       mbg.visible = false;
       mfill.visible = false;
     }
+  }
+
+  // ── CAPTURE POINT BAR ──
+  cpBg.clear();
+  cpFill.clear();
+  cpText.visible = false;
+  if (gamemode === 2 && capturePoint.radius) {
+    const cs = capturePoint.captureState;
+    const targetPct = Math.max(0, Math.min(1, (capturePoint.percentage ?? 0) / 100));
+    cpRenderPercent = lerp(cpRenderPercent, targetPct, 0.1);
+    const pct = cpRenderPercent;
+    const myTeam = players[myId]?.team;
+    let fillColor;
+    if (cs === 2) {
+      fillColor = 0x888888;
+    } else if (cs === 0 || cs === 3) {
+      fillColor = myTeam === 0 ? 0x4488ff : 0xff3333;
+    } else {
+      fillColor = myTeam === 1 ? 0x4488ff : 0xff3333;
+    }
+
+    cpBg.beginFill(0x000000, 0.55);
+    cpBg.lineStyle(1, 0x555555, 0.7);
+    cpBg.drawRoundedRect(cpBarX, cpBarY, cpBarW, cpBarH, 5);
+    cpBg.endFill();
+
+    if (pct > 0) {
+      cpFill.beginFill(fillColor, 0.9);
+      cpFill.drawRoundedRect(cpBarX, cpBarY, cpBarW * pct, cpBarH, 5);
+      cpFill.endFill();
+    }
+
+    const label = capturePoint.text || '';
+    if (cpText.text !== label) cpText.text = label;
+    cpText.visible = true;
   }
 }
 
