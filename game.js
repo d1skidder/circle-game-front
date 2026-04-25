@@ -131,7 +131,7 @@ function initPixi() {
   projLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(projLayer, obstacleLayer, playerLayer, capturePointGraphic);
+  mapContainer.addChild(capturePointGraphic,projLayer, obstacleLayer, playerLayer);
 
   generateTextures();
   initUI();
