@@ -33,6 +33,7 @@ let texCache = {};
 let pixiReady = false;
 let sessionId = 0;
 let gamemode = 0;
+let teamSelect = null;
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 function lerpAngle(a, b, t) {
@@ -59,10 +60,18 @@ function initJoinScreen() {
 
   document.getElementById('name-input').addEventListener('input', checkReady);
 
+  document.getElementById('session-select').addEventListener('change', () => {
+    const val = parseInt(document.getElementById('session-select').value, 10);
+    document.getElementById('team-select').style.display = (val === 1 || val === 2) ? 'block' : 'none';
+  });
+
   document.getElementById('join-btn').addEventListener('click', () => {
     myName = document.getElementById('name-input').value.trim();
     myClass = selectedClass;
     sessionId = parseInt(document.getElementById('session-select').value, 10);
+    teamSelect = (sessionId === 1 || sessionId === 2)
+      ? parseInt(document.getElementById('team-select').value, 10)
+      : null;
     if (!myName || !myClass) return;
     document.getElementById('joinScreen').style.display = 'none';
     document.getElementById('gameScreen').style.display = 'block';
@@ -234,7 +243,9 @@ function connectWS() {
   ws.onopen = () => {
     dbgSet('dbg-ws', '⬤ WebSocket: connected ✓', 'ok');
     dbgSet('dbg-id', '⬤ Session ID: joining...', 'warn');
-    ws.send(JSON.stringify({ type: 'join', name: myName, class: myClass, session: sessionId }));
+    const joinMsg = { type: 'join', name: myName, class: myClass, session: sessionId };
+    if (teamSelect !== null) joinMsg.team = teamSelect;
+    ws.send(JSON.stringify(joinMsg));
     if (pingIntervalId) clearInterval(pingIntervalId);
     pingIntervalId = setInterval(() => {
       if (ws && ws.readyState === WebSocket.OPEN) {
