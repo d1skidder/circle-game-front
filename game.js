@@ -363,6 +363,7 @@ document.addEventListener('mousemove', e => {
   const wx = (e.clientX - app.screen.width  / 2) / zoom + pl.renderX;
   const wy = (e.clientY - app.screen.height / 2) / zoom + pl.renderY;
   direction = Math.atan2(wy - pl.renderY, wx - pl.renderX);
+  pl.renderDir = direction;
 });
 document.addEventListener('mousedown', e => {
   // only send attack when game is running, not on lobby clicks
