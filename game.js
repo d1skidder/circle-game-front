@@ -295,7 +295,11 @@ function handleMessage(msg) {
           renderSkill1cd: p.skill1cd, renderSkill2cd: p.skill2cd, renderSkill3cd: p.skill3cd,
           lastUpdateTime: now, team: p.team};
       } else {
+        let prevdir = players[p.id].renderDir;
         Object.assign(players[p.id], p, { lastUpdateTime: now });
+        if (p.id === myId) {
+            players[myId].renderDir = prevdir;
+        }
       }
     });
     for (const id in players) {
