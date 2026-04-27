@@ -13,7 +13,7 @@ const CLASS_STYLES = {
   earth:     { body: 0x7a6a50, bodyHi: 0x9a8a70, arm: 0x55473a, outline: 0x2a2018 },
   blood:     { body: 0xaa1122, bodyHi: 0xff3355, arm: 0x880011, outline: 0x440008 },
   lightning: { body: 0xffee22, bodyHi: 0xffff99, arm: 0xddcc00, outline: 0x886600 },
-  void:      { body: 0x4a3d55, bodyHi: 0x7a6688, arm: 0x332840, outline: 0x1a1220 },
+  void:      { body: 0x52405f, bodyHi: 0x7f6890, arm: 0x3a2e48, outline: 0x1a1220 },
 };
 
 // ── STATE ────────────────────────────────────────
