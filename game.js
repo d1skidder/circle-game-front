@@ -298,7 +298,7 @@ function handleMessage(msg) {
         let prevdir = players[p.id].renderDir;
         Object.assign(players[p.id], p, { lastUpdateTime: now });
         if (p.id === myId) {
-            players[myId].renderDir = prevdir;
+            players[myId].dir = prevdir;
         }
       }
     });
@@ -409,7 +409,11 @@ function gameLoop() {
     const t = Math.min((now - p.lastUpdateTime) / SERVER_TICK, 1);
     p.renderX = lerp(p.last_x ?? p.x, p.x, t);
     p.renderY = lerp(p.last_y ?? p.y, p.y, t);
-    p.renderDir = lerpAngle(p.last_dir ?? p.dir, p.dir, t);
+    if (p === players[myId]) {
+      p.renderDir = direction;
+    } else {
+      p.renderDir = lerpAngle(p.last_dir ?? p.dir, p.dir, t);
+    }
     p.renderHealth = lerp(p.renderHealth ?? p.health, p.health, 0.12);
     p.renderMana   = lerp(p.renderMana   ?? p.mana,   p.mana,   0.12);
     p.renderSkill1cd = lerp(p.renderSkill1cd ?? p.skill1cd, p.skill1cd, 0.25);
