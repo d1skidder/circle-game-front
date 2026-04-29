@@ -590,10 +590,6 @@ function buildPlayerContainer(c, gameClass) {
     fontWeight: '900',
     stroke: 0x000000,
     strokeThickness: 4,
-    dropShadow: true,
-    dropShadowBlur: 6,
-    dropShadowColor: 0x000000,
-    dropShadowDistance: 0,
   });
   nt.anchor.set(0.5); nt.y = -40; nt.name = 'nametag'; c.addChild(nt);
 }
@@ -1057,10 +1053,6 @@ function getOrCreatePlayerUI(id) {
     fontWeight: '900',
     stroke: 0x000000,
     strokeThickness: 4,
-    dropShadow: true,
-    dropShadowBlur: 6,
-    dropShadowColor: 0x000000,
-    dropShadowDistance: 0,
   });
   nt.anchor.set(0.5);
   uiContainer.addChild(nt);
