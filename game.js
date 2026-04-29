@@ -36,6 +36,9 @@ let sessionId = 0;
 let gamemode = 0;
 let teamSelect = null;
 
+// ── DAMAGE TEXT STATE ─────────────────────────────
+let damageTexts = [];
+
 function lerp(a, b, t) { return a + (b - a) * t; }
 function lerpAngle(a, b, t) {
   let c = b - a;
@@ -80,7 +83,6 @@ function initJoinScreen() {
     dead = false; killcount = 0;
     players = {}; projectiles = {}; obstacles = {};
     clearScene();
-    // init pixi now if not done yet
     if (!pixiReady) initPixi();
     connectWS();
   });
@@ -115,6 +117,11 @@ function drawMapBg() {
   for (let y = 0; y <= MAP_DIM; y += 100) { mapBg.moveTo(0,y); mapBg.lineTo(MAP_DIM,y); }
   mapBg.lineStyle(5, 0x1a4a1a, 1);
   mapBg.drawRect(0, 0, MAP_DIM, MAP_DIM);
+  // ── dim overlay ──
+  mapBg.lineStyle(0);
+  mapBg.beginFill(0x000000, 0.15);
+  mapBg.drawRect(0, 0, MAP_DIM, MAP_DIM);
+  mapBg.endFill();
 }
 
 function initPixi() {
@@ -132,7 +139,6 @@ function initPixi() {
   uiContainer    = new PIXI.Container();
   app.stage.addChild(mapContainer, uiContainer);
 
-  // map background
   mapBg = new PIXI.Graphics();
   mapContainer.addChild(mapBg);
   drawMapBg();
@@ -141,7 +147,7 @@ function initPixi() {
   projLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(capturePointGraphic,projLayer, obstacleLayer, playerLayer);
+  mapContainer.addChild(capturePointGraphic, projLayer, obstacleLayer, playerLayer);
 
   generateTextures();
   initUI();
@@ -161,7 +167,12 @@ function clearScene() {
   mapContainer.addChild(projLayer, obstacleLayer, playerLayer, capturePointGraphic);
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
 
-  // Remove stale per-player UI (nametags, health bars, minimap dots) from uiContainer
+  for (const d of damageTexts) {
+    if (d.obj && d.obj.parent) d.obj.parent.removeChild(d.obj);
+    d.obj.destroy();
+  }
+  damageTexts = [];
+
   for (const id of Object.keys(uiPlayerUI)) removePlayerUI(id);
   for (const id of Object.keys(uiMmDots)) {
     uiContainer.removeChild(uiMmDots[id]);
@@ -174,10 +185,9 @@ function clearScene() {
 //  TEXTURE GENERATION
 // ═══════════════════════════════════════════════════
 function generateTextures() {
-  // Load sword sprite from GitHub assets
   texCache.sword         = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/swordSprite.png');
-  texCache.enhancedSword = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/enhancedsword_placeholder.png'); // same for now
-  texCache.iceSword      = texCache.sword; // same for now
+  texCache.enhancedSword = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/enhancedsword_placeholder.png');
+  texCache.iceSword      = texCache.sword;
   texCache.rock          = makeRockTexture();
 }
 
@@ -189,9 +199,7 @@ function bakeGraphic(g, w, h, cx, cy) {
   return rt;
 }
 
-
 function makeRockTexture() {
-  // Simple dark-green octagon, drawn centered at (50,50) in a 100x100 canvas
   const g = new PIXI.Graphics();
   const cx = 50, cy = 50, r = 42;
   g.lineStyle(3, 0x1a2a1a, 0.9);
@@ -202,7 +210,6 @@ function makeRockTexture() {
     g.lineTo(cx + r * Math.cos(ang), cy + r * Math.sin(ang));
   }
   g.endFill();
-  // simple lighter inner face
   g.lineStyle(0);
   g.beginFill(0x6a7e55, 0.5);
   g.moveTo(cx + (r*0.55)*Math.cos(-Math.PI/2), cy + (r*0.55)*Math.sin(-Math.PI/2));
@@ -293,12 +300,18 @@ function handleMessage(msg) {
         players[p.id] = { ...p, renderX: p.x, renderY: p.y, renderDir: p.dir,
           renderHealth: p.health, renderMana: p.mana,
           renderSkill1cd: p.skill1cd, renderSkill2cd: p.skill2cd, renderSkill3cd: p.skill3cd,
-          lastUpdateTime: now, team: p.team};
+          lastUpdateTime: now, team: p.team };
       } else {
-        let prevdir = players[p.id].renderDir;
-        Object.assign(players[p.id], p, { lastUpdateTime: now });
-        if (p.id === myId) {
-            players[myId].dir = prevdir;
+        const prev = players[p.id];
+        const prevHealth = prev.health ?? p.health;
+        const prevdir = prev.renderDir;
+        Object.assign(prev, p, { lastUpdateTime: now });
+        if (p.id === myId) players[myId].dir = prevdir;
+
+        // Spawn damage text if this player took damage
+        const dmg = Math.round(prevHealth - p.health);
+        if (dmg > 0 && p.id !== myId) {
+          spawnDamageText(p.x, p.y - 24, dmg, dmg >= 20);
         }
       }
     });
@@ -332,20 +345,16 @@ function handleMessage(msg) {
     gamemode = msg.gamemode;
     MAP_DIM = msg.mapDim || MAP_DIM;
     drawMapBg();
-    console.log(msg.sessionId)
+    console.log(msg.sessionId);
     let modeText = '';
-    if (gamemode == 0) {
-      modeText = 'Free For All';
-    } else if (gamemode == 1) {
-      modeText = 'Team Deathmatch';
-    } else if (gamemode == 2) {
-      modeText = 'Capture Point';
-    }
+    if (gamemode == 0) modeText = 'Free For All';
+    else if (gamemode == 1) modeText = 'Team Deathmatch';
+    else if (gamemode == 2) modeText = 'Capture Point';
     dbgSet('dbg-id', `⬤ Session ID: ${sessionId}, Gamemode: ${modeText}`, 'ok');
   }
 
   if (msg.type === 'capturepoint') {
-    capturePoint = {"x": msg.x, "y": msg.y, "radius": msg.radius, "captureState": msg.captureState, "text": msg.text, "percentage": msg.percentage};
+    capturePoint = { x: msg.x, y: msg.y, radius: msg.radius, captureState: msg.captureState, text: msg.text, percentage: msg.percentage };
   }
 }
 
@@ -370,7 +379,6 @@ document.addEventListener('mousemove', e => {
   pl.renderDir = direction;
 });
 document.addEventListener('mousedown', e => {
-  // only send attack when game is running, not on lobby clicks
   if (myId && !dead && document.getElementById('gameScreen').style.display === 'block')
     sendAttack('basicMelee');
 });
@@ -380,6 +388,55 @@ document.addEventListener('wheel', e => {
 function sendAttack(move) {
   if (ws && ws.readyState === WebSocket.OPEN)
     ws.send(JSON.stringify({ type: 'attack', move, dir: direction }));
+}
+
+// ═══════════════════════════════════════════════════
+//  DAMAGE TEXT
+// ═══════════════════════════════════════════════════
+function spawnDamageText(x, y, amount, isCrit = false) {
+  const style = new PIXI.TextStyle({
+    fontSize: isCrit ? 22 : 16,
+    fill: isCrit ? 0xff1100 : 0xff4444,
+    fontWeight: '900',
+    dropShadow: true,
+    dropShadowBlur: 4,
+    dropShadowColor: 0x000000,
+    dropShadowDistance: 0,
+    stroke: 0x000000,
+    strokeThickness: isCrit ? 4 : 3,
+  });
+  const text = new PIXI.Text(isCrit ? `${amount}!` : `${amount}`, style);
+  text.anchor.set(0.5);
+  text.x = x + (Math.random() - 0.5) * 18;
+  text.y = y - 40;
+  mapContainer.addChild(text);
+  damageTexts.push({
+    obj: text,
+    vy: -(2.2 + Math.random() * 0.8),
+    life: 1.0,
+    decay: isCrit ? 0.016 : 0.020,
+  });
+}
+
+function updateDamageTexts() {
+  for (let i = damageTexts.length - 1; i >= 0; i--) {
+    const d = damageTexts[i];
+    d.obj.y += d.vy;
+    d.vy *= 0.90;
+    d.life -= d.decay;
+    d.obj.alpha = d.life > 0.4 ? 1.0 : d.life / 0.4;
+    if (d.obj.style.fontSize > 18 && d.life > 0.85) {
+      const s = 1.0 + (d.life - 0.85) * 2.5;
+      d.obj.scale.set(s);
+    } else {
+      d.obj.scale.set(1.0);
+    }
+    if (d.life <= 0) {
+      mapContainer.removeChild(d.obj);
+      d.obj.destroy();
+      damageTexts.splice(i, 1);
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -404,7 +461,6 @@ function gameLoop() {
   const pl = players[myId];
   if (!pl) return;
 
-  // lerp
   for (const p of Object.values(players)) {
     const t = Math.min((now - p.lastUpdateTime) / SERVER_TICK, 1);
     p.renderX = lerp(p.last_x ?? p.x, p.x, t);
@@ -444,76 +500,102 @@ function gameLoop() {
     capturePointGraphic.endFill();
   }
 
+  updateDamageTexts();
   drawUI(now, pl);
 }
 
 // ═══════════════════════════════════════════════════
 //  PLAYER SPRITES
 // ═══════════════════════════════════════════════════
-//
-//  MENTAL MODEL:
-//  - playerContainer rotates so +X always points toward mouse (facing direction)
-//  - In local space: +X = forward, -X = backward, +Y = right, -Y = left
-//  - Body: circle at origin (0,0)
-//  - Arm1: at ( 8, -14) — left arm (forward-left)
-//  - Arm2: at ( 8,  14) — right arm (forward-right)
-//  - Sword: held in front, centered at (32, 0), blade along +X
-//  - Swing: container.rotation animates from facing to facing+swingArc
-//
-// ═══════════════════════════════════════════════════
+
+// Builds 8 offset shadow sprites behind the main sprite to fake an outline
+function buildSpriteOutline(texture, scaleX, scaleY, rotation, outlineColor, thickness) {
+  const container = new PIXI.Container();
+  const offsets = [
+    [-thickness,  0], [thickness,  0],
+    [0, -thickness], [0,  thickness],
+    [-thickness, -thickness], [ thickness, -thickness],
+    [-thickness,  thickness], [ thickness,  thickness],
+  ];
+  for (const [ox, oy] of offsets) {
+    const shadow = new PIXI.Sprite(texture);
+    shadow.anchor.set(0.5, 0.5);
+    shadow.scale.set(scaleX, scaleY);
+    shadow.rotation = rotation;
+    shadow.tint = outlineColor;
+    shadow.x = ox;
+    shadow.y = oy;
+    container.addChild(shadow);
+  }
+  return container;
+}
 
 function buildPlayerContainer(c, gameClass) {
   const st = CLASS_STYLES[gameClass] || CLASS_STYLES.fire;
 
-  // Aura — drawn at origin, behind everything
+  // Aura — behind everything
   const aura = new PIXI.Graphics(); aura.name = 'aura'; c.addChild(aura);
-  
-  // Sword sprite — held SIDEWAYS (perpendicular to facing)
-  // The container faces the mouse, so we rotate the sword 90deg inside
-  // to make it perpendicular. Blade along Y axis, handle at top.
+
+  // Sword outline container (8 tinted shadows behind the real sprite)
+  const swordOutline = buildSpriteOutline(
+    texCache.sword,
+    0.09, 0.11,
+    -Math.PI / 2,
+    0x000000,
+    1.5
+  );
+  swordOutline.x = 30; swordOutline.y = -30;
+  swordOutline.name = 'swordOutline';
+  c.addChild(swordOutline);
+
+  // Sword sprite — on top of outline
   const sword = new PIXI.Sprite(texCache.sword);
   sword.anchor.set(0.5, 0.5);
-  sword.x = 30; sword.y = -30;   // sits in front of player
+  sword.x = 30; sword.y = -30;
   sword.scale.set(0.09, 0.11);
-  sword.rotation = - Math.PI / 2; // rotate 90deg so blade is perpendicular to facing
-  //sword.blendMode = PIXI.BLEND_MODES.ADD;
-  sword.name = 'sword'; c.addChild(sword);
+  sword.rotation = -Math.PI / 2;
+  sword.name = 'sword';
+  c.addChild(sword);
 
-   // Arm circles — both reach forward, slightly apart on Y axis
-  // Since sword is perpendicular, one hand grips upper handle, one lower
+  // Arm circles
   const arm1 = new PIXI.Graphics();
-  arm1.lineStyle(2, 0x000000, 0.5);
+  arm1.lineStyle(3, 0x000000, 0.75);
   arm1.beginFill(st.arm, 1);
-  arm1.drawCircle(18, -12, 7);  // forward, slightly up (one hand on handle)
+  arm1.drawCircle(18, -12, 7);
   arm1.endFill();
   arm1.name = 'arm1'; c.addChild(arm1);
 
   const arm2 = new PIXI.Graphics();
-  arm2.lineStyle(2, 0x000000, 0.5);
+  arm2.lineStyle(3, 0x000000, 0.75);
   arm2.beginFill(st.arm, 1);
-  arm2.drawCircle(18, 12, 7);   // forward, slightly down (other hand on handle)
+  arm2.drawCircle(18, 12, 7);
   arm2.endFill();
   arm2.name = 'arm2'; c.addChild(arm2);
 
-  // Body circle — flat class color, black outline
+  // Body circle
   const body = new PIXI.Graphics();
-  body.lineStyle(2.5, 0x000000, 0.65);
+  body.lineStyle(3.5, 0x000000, 0.90);
   body.beginFill(st.body, 1);
   body.drawCircle(0, 0, 20);
   body.endFill();
   body.name = 'body'; c.addChild(body);
 
- 
-
-  // Armor overlay (invincibility)
+  // Armor overlay
   const armor = new PIXI.Graphics(); armor.name = 'armor'; c.addChild(armor);
 
-  // Name tag — always screen-upright, so we'll handle in update
+  // Name tag
   const nt = new PIXI.Text('', {
-    fontSize: 14, fill: 0xffffff, fontWeight: '700',
-    dropShadow: true, dropShadowBlur: 4, dropShadowColor: 0x000000, dropShadowDistance: 0,
+    fontSize: 16,
+    fill: 0xffffff,
+    fontWeight: '900',
+    stroke: 0x000000,
+    strokeThickness: 4,
+    dropShadow: true,
+    dropShadowBlur: 6,
+    dropShadowColor: 0x000000,
+    dropShadowDistance: 0,
   });
-  nt.anchor.set(0.5); nt.y = -38; nt.name = 'nametag'; c.addChild(nt);
+  nt.anchor.set(0.5); nt.y = -40; nt.name = 'nametag'; c.addChild(nt);
 }
 
 function updatePlayerSprite(id, p, now) {
@@ -524,7 +606,6 @@ function updatePlayerSprite(id, p, now) {
     playerContainers[id] = c;
   }
   const c = playerContainers[id];
-  const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
 
   c.x = p.renderX;
   c.y = p.renderY;
@@ -547,12 +628,10 @@ function updatePlayerSprite(id, p, now) {
   } else {
     p._swingAngle = 0;
   }
-  const swingAngle = p._swingAngle ?? 0;
 
-  // Container rotation = facing direction + swing
-  c.rotation = facing + swingAngle;
+  c.rotation = facing + (p._swingAngle ?? 0);
 
-  // ── AURA (frenzy / lightning speed) ──
+  // ── AURA ──
   const aura = c.getChildByName('aura');
   if (aura) {
     aura.clear();
@@ -575,7 +654,7 @@ function updatePlayerSprite(id, p, now) {
     }
   }
 
-  // ── ARMOR (invincible) ──
+  // ── ARMOR ──
   const armor = c.getChildByName('armor');
   if (armor) {
     armor.clear();
@@ -595,10 +674,15 @@ function updatePlayerSprite(id, p, now) {
     }
   }
 
-  // ── SWORD (enhanced) ──
+  // ── SWORD + OUTLINE texture swap ──
   const sword = c.getChildByName('sword');
+  const swordOutline = c.getChildByName('swordOutline');
   if (sword) {
-    sword.texture = p.basicEnhanced ? texCache.enhancedSword : texCache.sword;
+    const newTex = p.basicEnhanced ? texCache.enhancedSword : texCache.sword;
+    sword.texture = newTex;
+    if (swordOutline) {
+      for (const child of swordOutline.children) child.texture = newTex;
+    }
   }
 
   if (id === myId) killcount = p.killcount ?? 0;
@@ -737,7 +821,6 @@ function buildProjContainer(type, radius) {
       const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
   }
-  //const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.8);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
   return proj;
 }
 
@@ -765,21 +848,17 @@ function updateProjSprite(id, p, now) {
       }
       break;
     }
-
     case 'icicle':
       c.rotation = p.dir + Math.PI / 2;
       break;
-
     case 'iceblade':
       p._spin = (p._spin || 0) + 0.06;
       c.rotation = p._spin;
       break;
-
     case 'bloodblade':
       p._spin = (p._spin || 0) + 0.1;
       c.rotation = p._spin;
       break;
-
     case 'snowstorm': {
       const flake = c.getChildByName('flake');
       if (flake) flake.rotation = now / 800;
@@ -793,48 +872,36 @@ function updateProjSprite(id, p, now) {
       }
       break;
     }
-
     case 'shockwave': {
       const body = c.getChildByName('body');
       if (!body || !c._crackPaths) break;
       body.clear();
       const glow = 0.1 + 0.07 * Math.sin(now / 150);
-
       body.beginFill(0x5c3d1e, 0.2);
       body.drawCircle(0, 0, r);
       body.endFill();
-
       body.lineStyle(4, 0x6B4524, glow);
       for (const path of c._crackPaths) {
         body.moveTo(path[0].x * r, path[0].y * r);
         for (let k = 1; k < path.length; k++) body.lineTo(path[k].x * r, path[k].y * r);
       }
-
       body.lineStyle(1.5, 0x1a0800, 0.3);
       for (const path of c._crackPaths) {
         body.moveTo(path[0].x * r, path[0].y * r);
         for (let k = 1; k < path.length; k++) body.lineTo(path[k].x * r, path[k].y * r);
       }
-
       body.lineStyle(2, 0x6a4010, 0.3);
       body.drawCircle(0, 0, r);
       break;
     }
-
     case 'lightningball': {
       const core = c.getChildByName('core');
       if (core) {
         core.clear();
         const pulse = 0.85 + 0.15 * Math.sin(now / 80);
-        core.beginFill(0x8888ff, 0.2 * pulse);
-        core.drawCircle(0, 0, r * 2.2 * pulse);
-        core.endFill();
-        core.beginFill(0xaaaaff, 0.5 * pulse);
-        core.drawCircle(0, 0, r * 1.3 * pulse);
-        core.endFill();
-        core.beginFill(0xffffff, 0.95);
-        core.drawCircle(0, 0, r * 0.5);
-        core.endFill();
+        core.beginFill(0x8888ff, 0.2 * pulse); core.drawCircle(0, 0, r * 2.2 * pulse); core.endFill();
+        core.beginFill(0xaaaaff, 0.5 * pulse); core.drawCircle(0, 0, r * 1.3 * pulse); core.endFill();
+        core.beginFill(0xffffff, 0.95);         core.drawCircle(0, 0, r * 0.5);          core.endFill();
       }
       for (let i = 0; i < 4; i++) {
         const arc = c.getChildByName(`arc${i}`);
@@ -847,23 +914,18 @@ function updateProjSprite(id, p, now) {
           const jit = Math.sin(now / 30 + i * 7 + j * 3) * 0.5 * r;
           const x2  = Math.cos(sa + j * 0.4) * r * j * 0.4 + jit;
           const y2  = Math.sin(sa + j * 0.4) * r * j * 0.4 + jit;
-          arc.moveTo(x1, y1);
-          arc.lineTo(x2, y2);
-          x1 = x2;
-          y1 = y2;
+          arc.moveTo(x1, y1); arc.lineTo(x2, y2);
+          x1 = x2; y1 = y2;
         }
       }
       break;
     }
-
     case 'lightningbolt':
       c.rotation = p.dir;
       break;
-
     case 'lightningspark':
       c.rotation = now / 100;
       break;
-
   }
 }
 
@@ -890,30 +952,39 @@ function getOrCreateObstacle(id, ob) {
 // ═══════════════════════════════════════════════════
 //  UI
 // ═══════════════════════════════════════════════════
-
-// Persistent UI objects — created once, updated each frame
 let _ui = null;
 
 function initUI() {
   const W = app.screen.width, H = app.screen.height;
-  const sbW = 80, sbH = 12, sbGap = 28, totalW = sbW * 3 + sbGap * 2;
+  const sbW = 80, sbH = 14, sbGap = 28, totalW = sbW * 3 + sbGap * 2;
   const startX = W / 2 - totalW / 2, barY = H - 35;
   const lbW = 200, lbX = W - lbW - 10, lbY = 10;
   const mmSize = 180, mmX = 10, mmY = H - mmSize - 10;
 
+  const skillBadges = [0, 1, 2].map(i => {
+    const badge = new PIXI.Graphics();
+    badge.lineStyle(2, 0x000000, 0.9);
+    badge.beginFill(0x111111, 0.85);
+    badge.drawRoundedRect(startX + i * (sbW + sbGap) + sbW / 2 - 11, barY - 30, 22, 22, 5);
+    badge.endFill();
+    uiContainer.addChild(badge);
+    return badge;
+  });
+
   const skillLabels = ['Q', 'E', 'F'].map((key, i) => {
-    const t = new PIXI.Text(key, { fontSize: 15, fill: 0xcccccc, fontWeight: '600' });
+    const t = new PIXI.Text(key, { fontSize: 13, fill: 0xffffff, fontWeight: '700' });
     t.anchor.set(0.5);
     t.x = startX + sbW / 2 + i * (sbW + sbGap);
-    t.y = barY - 18;
+    t.y = barY - 19;
     uiContainer.addChild(t);
     return t;
   });
 
   const skillBgs = [0, 1, 2].map(i => {
     const bg = new PIXI.Graphics();
-    bg.beginFill(0x000000, 0.65);
-    bg.drawRoundedRect(startX + i * (sbW + sbGap), barY, sbW, sbH, 5);
+    bg.lineStyle(2.5, 0x000000, 1.0);
+    bg.beginFill(0x0a0a0a, 0.80);
+    bg.drawRoundedRect(startX + i * (sbW + sbGap), barY, sbW, sbH, 6);
     bg.endFill();
     uiContainer.addChild(bg);
     return bg;
@@ -925,13 +996,7 @@ function initUI() {
     return f;
   });
 
-  const skillOutlines = [0, 1, 2].map(i => {
-    const ol = new PIXI.Graphics();
-    ol.lineStyle(1, 0x446688, 0.6);
-    ol.drawRoundedRect(startX + i * (sbW + sbGap), barY, sbW, sbH, 5);
-    uiContainer.addChild(ol);
-    return ol;
-  });
+  const skillOutlines = [];
 
   const miniMap = new PIXI.Graphics();
   miniMap.beginFill(0x2a5a2a, 0.5);
@@ -976,25 +1041,32 @@ function initUI() {
   cpText.y = cpBarY + cpBarH / 2;
   uiContainer.addChild(cpText);
 
-  _ui = { skillLabels, skillBgs, skillFills, skillOutlines, miniMap, lbBg, lbTitle, lbRows,
+  _ui = { skillLabels, skillBadges, skillBgs, skillFills, skillOutlines,
+    miniMap, lbBg, lbTitle, lbRows,
     sbW, sbH, sbGap, startX, barY, lbW, lbX, lbY, mmSize, mmX, mmY,
     cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond };
 }
 
-// Per-player nametag + bar objects
 const uiPlayerUI = {};
 
 function getOrCreatePlayerUI(id) {
   if (uiPlayerUI[id]) return uiPlayerUI[id];
   const nt = new PIXI.Text('', {
-    fontSize: 13, fill: 0xffffff, fontWeight: '700',
-    dropShadow: true, dropShadowBlur: 4, dropShadowColor: 0x000000, dropShadowDistance: 0,
+    fontSize: 16,
+    fill: 0xffffff,
+    fontWeight: '900',
+    stroke: 0x000000,
+    strokeThickness: 4,
+    dropShadow: true,
+    dropShadowBlur: 6,
+    dropShadowColor: 0x000000,
+    dropShadowDistance: 0,
   });
   nt.anchor.set(0.5);
   uiContainer.addChild(nt);
-  const hbg = new PIXI.Graphics(); uiContainer.addChild(hbg);
+  const hbg   = new PIXI.Graphics(); uiContainer.addChild(hbg);
   const hfill = new PIXI.Graphics(); uiContainer.addChild(hfill);
-  const mbg = new PIXI.Graphics(); uiContainer.addChild(mbg);
+  const mbg   = new PIXI.Graphics(); uiContainer.addChild(mbg);
   const mfill = new PIXI.Graphics(); uiContainer.addChild(mfill);
   uiPlayerUI[id] = { nt, hbg, hfill, mbg, mfill };
   return uiPlayerUI[id];
@@ -1003,17 +1075,16 @@ function getOrCreatePlayerUI(id) {
 function removePlayerUI(id) {
   const ui = uiPlayerUI[id];
   if (!ui) return;
-  uiContainer.removeChild(ui.nt); ui.nt.destroy({ texture: true, baseTexture: true });
-  uiContainer.removeChild(ui.hbg); ui.hbg.destroy();
+  uiContainer.removeChild(ui.nt);    ui.nt.destroy({ texture: true, baseTexture: true });
+  uiContainer.removeChild(ui.hbg);   ui.hbg.destroy();
   uiContainer.removeChild(ui.hfill); ui.hfill.destroy();
-  uiContainer.removeChild(ui.mbg); ui.mbg.destroy();
+  uiContainer.removeChild(ui.mbg);   ui.mbg.destroy();
   uiContainer.removeChild(ui.mfill); ui.mfill.destroy();
   delete uiPlayerUI[id];
   const dot = uiMmDots[id];
   if (dot) { uiContainer.removeChild(dot); dot.destroy(); delete uiMmDots[id]; }
 }
 
-// Per-player minimap dots
 const uiMmDots = {};
 
 function drawUI(now, pl) {
@@ -1021,23 +1092,25 @@ function drawUI(now, pl) {
   const { skillFills, sbW, sbH, sbGap, startX, barY, lbBg, lbRows, lbW, lbX, lbY, mmSize, mmX, mmY,
     cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond } = _ui;
 
-  // Skill cooldown fills — redraw geometry only, no new object
   const cds = [pl.renderSkill1cd ?? pl.skill1cd, pl.renderSkill2cd ?? pl.skill2cd, pl.renderSkill3cd ?? pl.skill3cd];
   cds.forEach((cd, i) => {
     const f = skillFills[i];
     const x = startX + i * (sbW + sbGap);
     f.clear();
+    f.beginFill(0x222222, 0.5);
+    f.drawRoundedRect(x + 2, barY + 2, sbW - 4, sbH - 4, 4);
+    f.endFill();
     if (cd < 1) {
-      f.beginFill(0x00ccff, 0.85);
-      f.drawRoundedRect(x, barY, sbW * (1 - cd), sbH, 5);
+      const fillW = (sbW - 4) * (1 - cd);
+      f.beginFill(0x00ccff, 0.90);
+      f.drawRoundedRect(x + 2, barY + 2, fillW, sbH - 4, 4);
       f.endFill();
-      f.beginFill(0xffffff, 0.2);
-      f.drawRoundedRect(x, barY, sbW * (1 - cd), sbH / 2, 5);
+      f.beginFill(0xffffff, 0.18);
+      f.drawRoundedRect(x + 2, barY + 2, fillW, (sbH - 4) / 2, 4);
       f.endFill();
     }
   });
 
-  // Minimap dots — reuse per-player Graphics, clear+redraw position
   const mmScale = mmSize / MAP_DIM;
   for (const [id, p] of Object.entries(players)) {
     if (!uiMmDots[id]) {
@@ -1053,40 +1126,28 @@ function drawUI(now, pl) {
     const isAlly  = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
     if (id === myId) {
       const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
-      dot.beginFill(st.body, 0.85);
-      dot.drawCircle(mmCx, mmCy, 4);
-      dot.endFill();
-      dot.lineStyle(1.5, 0x44ff44, 1);
-      dot.drawCircle(mmCx, mmCy, 4);
+      dot.beginFill(st.body, 0.85); dot.drawCircle(mmCx, mmCy, 4); dot.endFill();
+      dot.lineStyle(1.5, 0x44ff44, 1); dot.drawCircle(mmCx, mmCy, 4);
     } else {
       const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
-      dot.beginFill(st.body, 0.85);
-      dot.drawCircle(mmCx, mmCy, 4);
-      dot.endFill();
+      dot.beginFill(st.body, 0.85); dot.drawCircle(mmCx, mmCy, 4); dot.endFill();
       const outlineColor = isEnemy ? 0xff3333 : isAlly ? 0x4488cc : 0xff3333;
-      dot.lineStyle(1.5, outlineColor, 1);
-      dot.drawCircle(mmCx, mmCy, 4);
+      dot.lineStyle(1.5, outlineColor, 1); dot.drawCircle(mmCx, mmCy, 4);
     }
   }
 
-  // Capture point diamond on minimap
   mmCpDiamond.clear();
   if (gamemode === 2 && capturePoint.radius) {
-    const mmScale = mmSize / MAP_DIM;
     const cx = mmX + capturePoint.x * mmScale;
     const cy = mmY + capturePoint.y * mmScale;
     const r = 5;
     mmCpDiamond.lineStyle(1.5, 0xffffff, 1);
     mmCpDiamond.beginFill(0xffffff, 0.85);
-    mmCpDiamond.moveTo(cx, cy - r);
-    mmCpDiamond.lineTo(cx + r, cy);
-    mmCpDiamond.lineTo(cx, cy + r);
-    mmCpDiamond.lineTo(cx - r, cy);
-    mmCpDiamond.closePath();
-    mmCpDiamond.endFill();
+    mmCpDiamond.moveTo(cx, cy - r); mmCpDiamond.lineTo(cx + r, cy);
+    mmCpDiamond.lineTo(cx, cy + r); mmCpDiamond.lineTo(cx - r, cy);
+    mmCpDiamond.closePath(); mmCpDiamond.endFill();
   }
 
-  // Leaderboard — update text strings (re-rasterizes only when string changes)
   const sorted = Object.entries(players).sort((a, b) => (b[1].killcount ?? 0) - (a[1].killcount ?? 0)).slice(0, 10);
   lbBg.clear();
   lbBg.beginFill(0x000000, 0.45);
@@ -1104,15 +1165,12 @@ function drawUI(now, pl) {
       row.style.fill = id === myId ? 0xaaccff : isLbEnemy ? 0xff4444 : 0xddeedd;
       const killText = `${p.killcount ?? 0}`;
       if (kills.text !== killText) kills.text = killText;
-      row.visible = true;
-      kills.visible = true;
+      row.visible = true; kills.visible = true;
     } else {
-      row.visible = false;
-      kills.visible = false;
+      row.visible = false; kills.visible = false;
     }
   });
 
-  // ── PLAYER NAMETAGS + HEALTH BARS ──
   for (const [id, p] of Object.entries(players)) {
     const sx = p.renderX * zoom + mapContainer.x;
     const sy = p.renderY * zoom + mapContainer.y;
@@ -1125,32 +1183,52 @@ function drawUI(now, pl) {
     const isAlly = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
     nt.style.fill = id === myId ? 0x44ee66 : isAlly ? 0xaaccff : 0xff4444;
     nt.x = sx;
-    nt.y = sy - 38 * zoom;
+    nt.y = sy - 42 * zoom;
 
-    const bw = 52 * zoom, bh = 6 * zoom;
+    const bw = 52 * zoom, bh = 7 * zoom;
     const bx = sx - bw / 2, by = sy + 26 * zoom;
+    const outlinePad = 1.5;
+
     hbg.clear();
-    hbg.beginFill(0x000000, 0.5);
+    hbg.beginFill(0x000000, 0.95);
+    hbg.drawRoundedRect(bx - outlinePad, by - outlinePad, bw + outlinePad * 2, bh + outlinePad * 2, 3);
+    hbg.endFill();
+    hbg.beginFill(0x111111, 0.80);
     hbg.drawRoundedRect(bx, by, bw, bh, 2);
     hbg.endFill();
+
     const hpct = Math.max(0, Math.min(1, (p.renderHealth ?? p.health) / 100));
     hfill.clear();
-    hfill.beginFill(hpct > 0.6 ? 0x44ee66 : hpct > 0.3 ? 0xffcc22 : 0xff2233, 0.95);
-    hfill.drawRoundedRect(bx, by, bw * hpct, bh, 2);
-    hfill.endFill();
+    if (hpct > 0) {
+      hfill.beginFill(hpct > 0.6 ? 0x44ee66 : hpct > 0.3 ? 0xffcc22 : 0xff2233, 0.95);
+      hfill.drawRoundedRect(bx, by, bw * hpct, bh, 2);
+      hfill.endFill();
+      hfill.beginFill(0xffffff, 0.15);
+      hfill.drawRoundedRect(bx, by, bw * hpct, bh / 2, 2);
+      hfill.endFill();
+    }
 
     if (id === myId) {
-      const mby = by + bh + 2, mbh = 5 * zoom;
+      const mby = by + bh + 3, mbh = 5 * zoom;
       mbg.clear();
-      mbg.beginFill(0x000000, 0.5);
+      mbg.beginFill(0x000000, 0.95);
+      mbg.drawRoundedRect(bx - outlinePad, mby - outlinePad, bw + outlinePad * 2, mbh + outlinePad * 2, 3);
+      mbg.endFill();
+      mbg.beginFill(0x111111, 0.80);
       mbg.drawRoundedRect(bx, mby, bw, mbh, 2);
       mbg.endFill();
       mbg.visible = true;
+
       const mpct = Math.max(0, Math.min(1, (p.renderMana ?? p.mana) / 100));
       mfill.clear();
-      mfill.beginFill(0x4488ff, 0.9);
-      mfill.drawRoundedRect(bx, mby, bw * mpct, mbh, 2);
-      mfill.endFill();
+      if (mpct > 0) {
+        mfill.beginFill(0x4488ff, 0.9);
+        mfill.drawRoundedRect(bx, mby, bw * mpct, mbh, 2);
+        mfill.endFill();
+        mfill.beginFill(0xffffff, 0.12);
+        mfill.drawRoundedRect(bx, mby, bw * mpct, mbh / 2, 2);
+        mfill.endFill();
+      }
       mfill.visible = true;
     } else {
       mbg.visible = false;
@@ -1158,7 +1236,6 @@ function drawUI(now, pl) {
     }
   }
 
-  // ── CAPTURE POINT BAR ──
   cpBg.clear();
   cpFill.clear();
   cpText.visible = false;
@@ -1169,25 +1246,19 @@ function drawUI(now, pl) {
     const pct = cpRenderPercent;
     const myTeam = players[myId]?.team;
     let fillColor;
-    if (cs === 2) {
-      fillColor = 0x888888;
-    } else if (cs === 0 || cs === 3) {
-      fillColor = myTeam === 0 ? 0x4488ff : 0xff3333;
-    } else {
-      fillColor = myTeam === 1 ? 0x4488ff : 0xff3333;
-    }
+    if (cs === 2) fillColor = 0x888888;
+    else if (cs === 0 || cs === 3) fillColor = myTeam === 0 ? 0x4488ff : 0xff3333;
+    else fillColor = myTeam === 1 ? 0x4488ff : 0xff3333;
 
     cpBg.beginFill(0x000000, 0.55);
     cpBg.lineStyle(1, 0x555555, 0.7);
     cpBg.drawRoundedRect(cpBarX, cpBarY, cpBarW, cpBarH, 5);
     cpBg.endFill();
-
     if (pct > 0) {
       cpFill.beginFill(fillColor, 0.9);
       cpFill.drawRoundedRect(cpBarX, cpBarY, cpBarW * pct, cpBarH, 5);
       cpFill.endFill();
     }
-
     const label = capturePoint.text || '';
     if (cpText.text !== label) cpText.text = label;
     cpText.visible = true;
