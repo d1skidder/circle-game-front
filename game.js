@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'https://circle-game-5y2k.onrender.com'; // TODO: change to deployed server URL
+const WS_URL = 'ws://localhost:8080';
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -310,7 +310,7 @@ function handleMessage(msg) {
 
         // Spawn damage text if this player took damage
         const dmg = Math.round(prevHealth - p.health);
-        if (dmg > 0 && p.id !== myId) {
+        if (dmg > 0 || dmg < -1) {
           spawnDamageText(p.x, p.y - 24, dmg, dmg >= 20);
         }
       }
@@ -396,7 +396,7 @@ function sendAttack(move) {
 function spawnDamageText(x, y, amount, isCrit = false) {
   const style = new PIXI.TextStyle({
     fontSize: isCrit ? 22 : 16,
-    fill: isCrit ? 0xff1100 : 0xff4444,
+    fill: amount < 0 ? 0x7CFC00 : (isCrit ? 0xff1100 : 0xff4444),
     fontWeight: '900',
     dropShadow: true,
     dropShadowBlur: 4,
@@ -405,7 +405,7 @@ function spawnDamageText(x, y, amount, isCrit = false) {
     stroke: 0x000000,
     strokeThickness: isCrit ? 4 : 3,
   });
-  const text = new PIXI.Text(isCrit ? `${amount}!` : `${amount}`, style);
+  const text = new PIXI.Text(isCrit ? `${Math.abs(amount)}!` : `${Math.abs(amount)}`, style);
   text.anchor.set(0.5);
   text.x = x + (Math.random() - 0.5) * 18;
   text.y = y - 40;
