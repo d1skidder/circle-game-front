@@ -1072,7 +1072,7 @@ function removePlayerUI(id) {
   uiContainer.removeChild(ui.hfill); ui.hfill.destroy();
   uiContainer.removeChild(ui.mbg);   ui.mbg.destroy();
   uiContainer.removeChild(ui.mfill); ui.mfill.destroy();
-  delete uiPlayerUI[id];
+delete uiPlayerUI[id];
   const dot = uiMmDots[id];
   if (dot) { uiContainer.removeChild(dot); dot.destroy(); delete uiMmDots[id]; }
 }
@@ -1123,7 +1123,7 @@ function drawUI(now, pl) {
     } else {
       const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
       dot.beginFill(st.body, 0.85); dot.drawCircle(mmCx, mmCy, 4); dot.endFill();
-      const outlineColor = isEnemy ? 0xff3333 : isAlly ? 0x4488cc : 0xff3333;
+      const outlineColor = isEnemy ? 0xff3333 : isAlly ? 0x44aaff : 0xff3333;
       dot.lineStyle(1.5, outlineColor, 1); dot.drawCircle(mmCx, mmCy, 4);
     }
   }
