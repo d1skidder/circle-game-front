@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'https://circle-game-5y2k.onrender.com';
+const WS_URL = 'ws://localhost:8080'; // ── CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -14,6 +14,7 @@ const CLASS_STYLES = {
   blood:     { body: 0xaa1122, bodyHi: 0xff3355, arm: 0x880011, outline: 0x440008 },
   lightning: { body: 0xffee22, bodyHi: 0xffff99, arm: 0xddcc00, outline: 0x886600 },
   void:      { body: 0x48315c, bodyHi: 0x7f6890, arm: 0x3a2e48, outline: 0x1a1220 },
+  crusader:  { body: 0xffffff, bodyHi: 0xeeeeee, arm: 0xcccccc, outline: 0x444444 },
 };
 
 // ── STATE ────────────────────────────────────────
@@ -25,6 +26,7 @@ let capturePoint = {}, cpRenderPercent = 0;
 let zoom = 1.1, direction = 0;
 const pressed = {};
 let lastMoveSend = 0;
+// ── PIXI OBJECTS ─────────────────────────────────
 let app, mapContainer, uiContainer;
 let obstacleLayer, projLayer, playerLayer;
 let mapBg = null;
@@ -32,9 +34,11 @@ let capturePointGraphic = null;
 let playerContainers = {}, projContainers = {}, obstacleSprites = {};
 let texCache = {};
 let pixiReady = false;
+// –– GAME DATA ───────────────────────────────────────
 let sessionId = 0;
 let gamemode = 0;
 let teamSelect = null;
+let team0score = 0, team1score = 0;
 
 // ── DAMAGE TEXT STATE ─────────────────────────────
 let damageTexts = [];
@@ -339,7 +343,6 @@ function handleMessage(msg) {
   }
 
   if (msg.type === 'gameStart') {
-    console.log(msg);
     msg.obstacles.forEach(p => { if (!obstacles[p.id]) obstacles[p.id] = { ...p }; });
     sessionId = msg.sessionId;
     gamemode = msg.gamemode;
@@ -355,6 +358,11 @@ function handleMessage(msg) {
 
   if (msg.type === 'capturepoint') {
     capturePoint = { x: msg.x, y: msg.y, radius: msg.radius, captureState: msg.captureState, text: msg.text, percentage: msg.percentage };
+  }
+
+  if (msg.type === 'gameState') {
+    team0score = msg.team0score;
+    team1score = msg.team1score;
   }
 }
 
@@ -579,6 +587,16 @@ function buildPlayerContainer(c, gameClass) {
   body.drawCircle(0, 0, 20);
   body.endFill();
   body.name = 'body'; c.addChild(body);
+
+  // Crusader cross
+  if (gameClass === 'crusader') {
+    const cross = new PIXI.Graphics();
+    cross.beginFill(0xcc0000, 1);
+    cross.drawRect(-6, -9, 6, 18);   // vertical bar
+    cross.drawRect(-12, -3, 24, 6);   // horizontal bar
+    cross.endFill();
+    cross.name = 'cross'; c.addChild(cross);
+  }
 
   // Armor overlay
   const armor = new PIXI.Graphics(); armor.name = 'armor'; c.addChild(armor);
@@ -1003,6 +1021,18 @@ function initUI() {
   const mmCpDiamond = new PIXI.Graphics();
   uiContainer.addChild(mmCpDiamond);
 
+  const statTextStyle = { fontSize: 14, fill: 0xffffff, fontWeight: '700', dropShadow: true, dropShadowDistance: 1, dropShadowAlpha: 0.8 };
+  const mmStatX = mmX + mmSize + 10;
+  const hpStatText = new PIXI.Text('', statTextStyle);
+  hpStatText.x = mmStatX;
+  hpStatText.y = mmY + mmSize - 38;
+  uiContainer.addChild(hpStatText);
+
+  const manaStatText = new PIXI.Text('', { ...statTextStyle, fill: 0x66aaff });
+  manaStatText.x = mmStatX;
+  manaStatText.y = mmY + mmSize - 18;
+  uiContainer.addChild(manaStatText);
+
   const lbBg = new PIXI.Graphics();
   uiContainer.addChild(lbBg);
 
@@ -1037,10 +1067,45 @@ function initUI() {
   cpText.y = cpBarY + cpBarH / 2;
   uiContainer.addChild(cpText);
 
+  // Gamemode 1: centered team score at top (three separate texts for per-team coloring)
+  const tdmScore0 = new PIXI.Text('', { fontSize: 22, fill: 0x4488ff, fontWeight: '700', dropShadow: true, dropShadowDistance: 2, dropShadowAlpha: 0.7 });
+  tdmScore0.anchor.set(1, 0);
+  tdmScore0.y = 10;
+  tdmScore0.visible = false;
+  uiContainer.addChild(tdmScore0);
+  const tdmSep = new PIXI.Text('  -  ', { fontSize: 22, fill: 0xffffff, fontWeight: '700', dropShadow: true, dropShadowDistance: 2, dropShadowAlpha: 0.7 });
+  tdmSep.anchor.set(0.5, 0);
+  tdmSep.x = W / 2;
+  tdmSep.y = 10;
+  tdmSep.visible = false;
+  uiContainer.addChild(tdmSep);
+  const tdmScore1 = new PIXI.Text('', { fontSize: 22, fill: 0xff3333, fontWeight: '700', dropShadow: true, dropShadowDistance: 2, dropShadowAlpha: 0.7 });
+  tdmScore1.anchor.set(0, 0);
+  tdmScore1.y = 10;
+  tdmScore1.visible = false;
+  uiContainer.addChild(tdmScore1);
+
+  // Gamemode 2: scores flanking the capture bar
+  const cpScore0 = new PIXI.Text('', { fontSize: 18, fill: 0x4488ff, fontWeight: '700', dropShadow: true, dropShadowDistance: 2, dropShadowAlpha: 0.7 });
+  cpScore0.anchor.set(1, 0.5);
+  cpScore0.x = cpBarX - 10;
+  cpScore0.y = cpBarY + cpBarH / 2;
+  cpScore0.visible = false;
+  uiContainer.addChild(cpScore0);
+
+  const cpScore1 = new PIXI.Text('', { fontSize: 18, fill: 0xff3333, fontWeight: '700', dropShadow: true, dropShadowDistance: 2, dropShadowAlpha: 0.7 });
+  cpScore1.anchor.set(0, 0.5);
+  cpScore1.x = cpBarX + cpBarW + 10;
+  cpScore1.y = cpBarY + cpBarH / 2;
+  cpScore1.visible = false;
+  uiContainer.addChild(cpScore1);
+
   _ui = { skillLabels, skillBadges, skillBgs, skillFills, skillOutlines,
     miniMap, lbBg, lbTitle, lbRows,
     sbW, sbH, sbGap, startX, barY, lbW, lbX, lbY, mmSize, mmX, mmY,
-    cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond };
+    cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond,
+    tdmScore0, tdmSep, tdmScore1, cpScore0, cpScore1,
+    hpStatText, manaStatText };
 }
 
 const uiPlayerUI = {};
@@ -1082,7 +1147,18 @@ const uiMmDots = {};
 function drawUI(now, pl) {
   if (!_ui) return;
   const { skillFills, sbW, sbH, sbGap, startX, barY, lbBg, lbRows, lbW, lbX, lbY, mmSize, mmX, mmY,
-    cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond } = _ui;
+    cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond,
+    tdmScore0, tdmSep, tdmScore1, cpScore0, cpScore1,
+    hpStatText, manaStatText } = _ui;
+
+  const hp = Math.round(pl.renderHealth ?? pl.health ?? 0);
+  const mp = Math.round(pl.renderMana ?? pl.mana ?? 0);
+  const hpStr = `HP: ${hp}`;
+  const mpStr = `MP: ${mp}`;
+  if (hpStatText.text !== hpStr) hpStatText.text = hpStr;
+  if (manaStatText.text !== mpStr) manaStatText.text = mpStr;
+  const hpPct = hp / 100;
+  hpStatText.style.fill = hpPct > 0.6 ? 0x44ee66 : hpPct > 0.3 ? 0xffcc22 : 0xff4444;
 
   const cds = [pl.renderSkill1cd ?? pl.skill1cd, pl.renderSkill2cd ?? pl.skill2cd, pl.renderSkill3cd ?? pl.skill3cd];
   cds.forEach((cd, i) => {
@@ -1228,15 +1304,39 @@ function drawUI(now, pl) {
     }
   }
 
+  const myTeam = players[myId]?.team;
+
+  // Gamemode 1: team deathmatch score
+  if (gamemode === 1) {
+    const s0 = `${team0score}`, s1 = `${team1score}`;
+    if (tdmScore0.text !== s0) tdmScore0.text = s0;
+    if (tdmScore1.text !== s1) tdmScore1.text = s1;
+    tdmScore0.style.fill = myTeam === 0 ? 0x4488ff : 0xff3333;
+    tdmScore1.style.fill = myTeam === 1 ? 0x4488ff : 0xff3333;
+    // position: left score right-anchored, right score left-anchored around center
+    const W = app.screen.width;
+    tdmSep.x = W / 2;
+    tdmScore0.x = W / 2 - tdmSep.width / 2;
+    tdmScore1.x = W / 2 + tdmSep.width / 2;
+    tdmScore0.visible = true;
+    tdmSep.visible = true;
+    tdmScore1.visible = true;
+  } else {
+    tdmScore0.visible = false;
+    tdmSep.visible = false;
+    tdmScore1.visible = false;
+  }
+
   cpBg.clear();
   cpFill.clear();
   cpText.visible = false;
+  cpScore0.visible = false;
+  cpScore1.visible = false;
   if (gamemode === 2 && capturePoint.radius) {
     const cs = capturePoint.captureState;
     const targetPct = Math.max(0, Math.min(1, (capturePoint.percentage ?? 0) / 100));
     cpRenderPercent = lerp(cpRenderPercent, targetPct, 0.1);
     const pct = cpRenderPercent;
-    const myTeam = players[myId]?.team;
     let fillColor;
     if (cs === 2) fillColor = 0x888888;
     else if (cs === 0 || cs === 3) fillColor = myTeam === 0 ? 0x4488ff : 0xff3333;
@@ -1254,6 +1354,14 @@ function drawUI(now, pl) {
     const label = capturePoint.text || '';
     if (cpText.text !== label) cpText.text = label;
     cpText.visible = true;
+
+    const s0 = `${team0score}`, s1 = `${team1score}`;
+    if (cpScore0.text !== s0) cpScore0.text = s0;
+    if (cpScore1.text !== s1) cpScore1.text = s1;
+    cpScore0.style.fill = myTeam === 0 ? 0x4488ff : 0xff3333;
+    cpScore1.style.fill = myTeam === 1 ? 0x4488ff : 0xff3333;
+    cpScore0.visible = true;
+    cpScore1.visible = true;
   }
 }
 
