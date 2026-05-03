@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'https://circle-game-5y2k.onrender.com'; 
+const WS_URL = 'https://circle-game-5y2k.onrender.com'; // ── CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -957,7 +957,7 @@ function removeProjSprite(id) {
 function getOrCreateObstacle(id, ob) {
   if (obstacleSprites[id]) return;
   const s = new PIXI.Sprite(texCache.rock);
-  s.anchor.set(0.5); s.width=ob.radius*2; s.height=ob.radius*2;
+  s.anchor.set(0.5); s.width=ob.radius*(100/42); s.height=ob.radius*(100/42);
   s.x=ob.x; s.y=ob.y;
   obstacleLayer.addChild(s);
   obstacleSprites[id]=s;
