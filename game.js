@@ -775,45 +775,33 @@ function buildProjContainer(type, radius) {
 }));
   break;
 }case 'voidpull': {
-  const scale = (r * 2) / 200;
+  const baseScale = (r * 2) / 512;
 
-  // Glow behind everything
-  const glow = new PIXI.Graphics();
-  glow.name = 'voidGlow';
-  proj.addChild(glow);
+  const outer = new PIXI.Sprite(texCache.voidOuter);
+  outer.anchor.set(0.5);
+  outer.scale.set(baseScale);
+  outer.name = 'vpOuter';
 
-  // Ghost trails (3 faded copies behind the hand)
-  for (let i = 0; i < 3; i++) {
-    const ghost = new PIXI.Sprite(texCache.voidHand);
-    ghost.anchor.set(0.5);
-    ghost.scale.set(scale);
-    ghost.name = `voidGhost${i}`;
-    ghost.tint = 0x9933cc;
-    ghost.alpha = 0.15 - i * 0.04;
-    proj.addChild(ghost);
-  }
+  const inner = new PIXI.Sprite(texCache.voidInner);
+  inner.anchor.set(0.5);
+  inner.scale.set(baseScale * 0.6);
+  inner.name = 'vpInner';
 
-  // Main hand on top
-  const hand = new PIXI.Sprite(texCache.voidHand);
-  hand.anchor.set(0.5);
-  hand.scale.set(scale);
-  hand.name = 'voidHand';
-  proj.addChild(hand);
-
+  proj.addChild(outer, inner);
   break;
 }
 case 'voidorb': {
-  const scale = (r * 2) / 512;
-  const ring = new PIXI.Sprite(texCache.voidInner);
-  ring.anchor.set(0.5);
-  ring.scale.set(scale);
-  ring.name = 'voidOrbRing';
-  const center = new PIXI.Graphics();
-  center.beginFill(0x000000, 0.9);
-  center.drawCircle(0, 0, r * 0.5);
-  center.endFill();
-  center.name = 'voidOrbCenter';
-  proj.addChild(center, ring);
+  const trail = new PIXI.Graphics();
+  trail.name = 'voidOrbTrail';
+
+  const body = new PIXI.Graphics();
+  body.beginFill(0x000000, 0.95);
+  body.drawCircle(0, 0, r);
+  body.endFill();
+  body.name = 'voidOrbBody';
+
+  proj.addChild(trail, body);
+  proj._orbHistory = [];
   break;
 }
     case 'icicle': {
@@ -942,8 +930,26 @@ function updateProjSprite(id, p, now) {
       break;
     }
     case 'voidorb': {
-  const ring = c.getChildByName('voidOrbRing');
-  if (ring) ring.rotation -= 0.02;
+  if (!c._orbHistory) c._orbHistory = [];
+  c._orbHistory.push({ x: p.renderX, y: p.renderY });
+  if (c._orbHistory.length > 14) c._orbHistory.shift();
+
+  const trail = c.getChildByName('voidOrbTrail');
+  if (trail && c._orbHistory.length > 1) {
+    trail.clear();
+    const len = c._orbHistory.length;
+    for (let i = 0; i < len - 1; i++) {
+      const pct = i / len;
+      const alpha = pct * 0.55;
+      const size = r * (0.3 + pct * 0.6);
+      // offset relative to current orb position
+      const tx = c._orbHistory[i].x - p.renderX;
+      const ty = c._orbHistory[i].y - p.renderY;
+      trail.beginFill(0x2a0a3a, alpha);
+      trail.drawCircle(tx, ty, size);
+      trail.endFill();
+    }
+  }
   break;
 }
     case 'blackhole': {
@@ -981,31 +987,12 @@ function updateProjSprite(id, p, now) {
   break;
 }
 case 'voidpull': {
-  const hand = c.getChildByName('voidHand');
-  if (hand) hand.rotation = p.dir + Math.PI / 2;
-
-  const glow = c.getChildByName('voidGlow');
-  if (glow) {
-    const pulse = 0.25 + 0.12 * Math.sin(now / 180);
-    glow.alpha = pulse;
-    glow.rotation = p.dir + Math.PI / 2;
-    glow.scale.set(((r * 2) / 200) * (1.5 + 0.1 * Math.sin(now / 180)));
-  }
-
-  for (let i = 0; i < 3; i++) {
-    const ghost = c.getChildByName(`voidGhost${i}`);
-    if (!ghost) continue;
-    const offset = (i + 1) * 16;
-    ghost.x = -Math.cos(p.dir) * offset;
-    ghost.y = -Math.sin(p.dir) * offset;
-    ghost.rotation = p.dir + Math.PI / 2;
-    ghost.alpha = 0.18 - i * 0.05;
-    ghost.scale.set((r * 2) / 200 * (1 - i * 0.06));
-  }
-
+  const outer = c.getChildByName('vpOuter');
+  const inner = c.getChildByName('vpInner');
+  if (outer) outer.rotation -= 0.02;
+  if (inner) inner.rotation += 0.035;
   break;
 }
-  
     case 'icicle':
       c.rotation = p.dir + Math.PI / 2;
       break;
