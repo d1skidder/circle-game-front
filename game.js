@@ -191,6 +191,9 @@ function clearScene() {
 function generateTextures() {
   texCache.sword         = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/swordSprite.png');
   texCache.enhancedSword = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/enhancedsword_placeholder.png');
+  texCache.voidOuter  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidOuterRingClean.png');
+  texCache.voidMiddle = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidMiddleRingClean.png');
+  texCache.voidInner  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidInnerRingClean.png');
   texCache.iceSword      = texCache.sword;
   texCache.rock          = makeRockTexture();
 }
@@ -737,6 +740,40 @@ function buildProjContainer(type, radius) {
       for(let i=0;i<5;i++){const w=new PIXI.Graphics();w.name=`wisp${i}`;proj.addChild(w);}
       break;
     }
+    case 'blackhole': {
+  const baseScale = (r * 2) / 512;
+
+  const center = new PIXI.Graphics();
+  center.beginFill(0x000000, 0.85);
+  center.drawCircle(0, 0, r * 0.6);
+  center.endFill();
+  center.name = 'bhCenter';
+
+  const outer = new PIXI.Sprite(texCache.voidOuter);
+  outer.anchor.set(0.5); outer.scale.set(baseScale); outer.name = 'voidOuter';
+  const middle = new PIXI.Sprite(texCache.voidMiddle);
+  middle.anchor.set(0.5); middle.scale.set(baseScale * 1); middle.name = 'voidMiddle';
+  const inner = new PIXI.Sprite(texCache.voidInner);
+  inner.anchor.set(0.5); inner.scale.set(baseScale * 0.5); inner.name = 'voidInner';
+      proj.addChild(center, outer, middle, inner);
+  for (let i = 0; i < 5; i++) {
+    const dot = new PIXI.Graphics();
+    dot.name = `bhDot${i}`;
+    dot.beginFill(i % 2 === 0 ? 0x9955cc : 0x1a0a2a, 0.9);
+    dot.drawCircle(0, 0, 20 + Math.random() * 4);
+    dot.endFill();
+    proj.addChild(dot);
+  }
+
+  
+  proj._bhParticles = Array.from({ length: 5 }, (_, i) => ({
+  angle: (i / 5) * Math.PI * 2,
+  radius: r * (1.1 + Math.random() * 0.2),
+  speed: 0.02 + Math.random() * 0.02,
+  inSpeed: 2.5 + Math.random() * 1.5,
+}));
+  break;
+}
     case 'icicle': {
       const ic=new PIXI.Graphics();
       ic.beginFill(0xeeffff,0.95);
@@ -862,6 +899,41 @@ function updateProjSprite(id, p, now) {
       }
       break;
     }
+    case 'blackhole': {
+  const outer  = c.getChildByName('voidOuter');
+  const middle = c.getChildByName('voidMiddle');
+  const inner  = c.getChildByName('voidInner');
+  if (outer)  outer.rotation  -= 0.008;
+  if (middle) middle.rotation += 0.014;
+  if (inner)  inner.rotation  -= 0.022;
+
+  if (c._bhParticles) {
+    for (let i = 0; i < c._bhParticles.length; i++) {
+      const pd = c._bhParticles[i];
+      const dot = c.getChildByName(`bhDot${i}`);
+      if (!dot) continue;
+
+      pd.angle += pd.speed;
+      pd.radius -= pd.inSpeed;
+
+      if (pd.radius < r * 0.1) {
+  pd.radius = r * (1.1 + Math.random() * 0.2);
+  pd.angle = Math.random() * Math.PI * 2;
+  pd.speed = 0.02 + Math.random() * 0.02;
+  pd.inSpeed = 2.5 + Math.random() * 1.5;
+}
+
+      dot.x = Math.cos(pd.angle) * pd.radius;
+      dot.y = Math.sin(pd.angle) * pd.radius;
+      // Fade and shrink as they get closer to center
+      const pct = pd.radius / (r * 1.4);
+      dot.alpha = pct;
+      dot.scale.set(0.3 + pct * 0.7);
+    }
+  }
+  break;
+}
+  
     case 'icicle':
       c.rotation = p.dir + Math.PI / 2;
       break;
