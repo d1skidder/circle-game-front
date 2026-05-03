@@ -194,6 +194,7 @@ function generateTextures() {
   texCache.voidOuter  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidOuterRingClean.png');
   texCache.voidMiddle = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidMiddleRingClean.png');
   texCache.voidInner  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidInnerRingClean.png');
+  texCache.voidHand = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidHandClean.png');
   texCache.iceSword      = texCache.sword;
   texCache.rock          = makeRockTexture();
 }
@@ -773,6 +774,47 @@ function buildProjContainer(type, radius) {
   inSpeed: 2.5 + Math.random() * 1.5,
 }));
   break;
+}case 'voidpull': {
+  const scale = (r * 2) / 200;
+
+  // Glow behind everything
+  const glow = new PIXI.Graphics();
+  glow.name = 'voidGlow';
+  proj.addChild(glow);
+
+  // Ghost trails (3 faded copies behind the hand)
+  for (let i = 0; i < 3; i++) {
+    const ghost = new PIXI.Sprite(texCache.voidHand);
+    ghost.anchor.set(0.5);
+    ghost.scale.set(scale);
+    ghost.name = `voidGhost${i}`;
+    ghost.tint = 0x9933cc;
+    ghost.alpha = 0.15 - i * 0.04;
+    proj.addChild(ghost);
+  }
+
+  // Main hand on top
+  const hand = new PIXI.Sprite(texCache.voidHand);
+  hand.anchor.set(0.5);
+  hand.scale.set(scale);
+  hand.name = 'voidHand';
+  proj.addChild(hand);
+
+  break;
+}
+case 'voidorb': {
+  const scale = (r * 2) / 512;
+  const ring = new PIXI.Sprite(texCache.voidInner);
+  ring.anchor.set(0.5);
+  ring.scale.set(scale);
+  ring.name = 'voidOrbRing';
+  const center = new PIXI.Graphics();
+  center.beginFill(0x000000, 0.9);
+  center.drawCircle(0, 0, r * 0.5);
+  center.endFill();
+  center.name = 'voidOrbCenter';
+  proj.addChild(center, ring);
+  break;
 }
     case 'icicle': {
       const ic=new PIXI.Graphics();
@@ -899,6 +941,11 @@ function updateProjSprite(id, p, now) {
       }
       break;
     }
+    case 'voidorb': {
+  const ring = c.getChildByName('voidOrbRing');
+  if (ring) ring.rotation -= 0.02;
+  break;
+}
     case 'blackhole': {
   const outer  = c.getChildByName('voidOuter');
   const middle = c.getChildByName('voidMiddle');
@@ -931,6 +978,31 @@ function updateProjSprite(id, p, now) {
       dot.scale.set(0.3 + pct * 0.7);
     }
   }
+  break;
+}
+case 'voidpull': {
+  const hand = c.getChildByName('voidHand');
+  if (hand) hand.rotation = p.dir + Math.PI / 2;
+
+  const glow = c.getChildByName('voidGlow');
+  if (glow) {
+    const pulse = 0.25 + 0.12 * Math.sin(now / 180);
+    glow.alpha = pulse;
+    glow.rotation = p.dir + Math.PI / 2;
+    glow.scale.set(((r * 2) / 200) * (1.5 + 0.1 * Math.sin(now / 180)));
+  }
+
+  for (let i = 0; i < 3; i++) {
+    const ghost = c.getChildByName(`voidGhost${i}`);
+    if (!ghost) continue;
+    const offset = (i + 1) * 16;
+    ghost.x = -Math.cos(p.dir) * offset;
+    ghost.y = -Math.sin(p.dir) * offset;
+    ghost.rotation = p.dir + Math.PI / 2;
+    ghost.alpha = 0.18 - i * 0.05;
+    ghost.scale.set((r * 2) / 200 * (1 - i * 0.06));
+  }
+
   break;
 }
   
