@@ -195,6 +195,8 @@ function generateTextures() {
   texCache.voidMiddle = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidMiddleRingClean.png');
   texCache.voidInner  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidInnerRingClean.png');
   texCache.voidHand = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidHandClean.png');
+  texCache.crusadeWing = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/CrusadeWingClean.png');
+  texCache.holySword = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/HolySwordClean.png');
   texCache.iceSword      = texCache.sword;
   texCache.rock          = makeRockTexture();
 }
@@ -335,12 +337,15 @@ function handleMessage(msg) {
 
   if (msg.type === 'projectiles') {
     msg.projectiles.forEach(p => {
-      if (!projectiles[p.id]) {
-        projectiles[p.id] = { ...p, renderX: p.x, renderY: p.y, lastUpdateTime: now };
-      } else {
-        Object.assign(projectiles[p.id], p, { lastUpdateTime: now });
-      }
-    });
+  if (!projectiles[p.id]) {
+    projectiles[p.id] = { ...p, renderX: p.x, renderY: p.y, lastUpdateTime: now };
+  } else {
+    const prev = projectiles[p.id];
+    const prevX = prev.x;
+    const prevY = prev.y;
+    Object.assign(prev, p, { lastUpdateTime: now, last_x: prevX, last_y: prevY });
+  }
+});
     for (const id in projectiles) {
       if (projectiles[id].lastUpdateTime !== now) { removeProjSprite(id); delete projectiles[id]; }
     }
@@ -403,30 +408,37 @@ function sendAttack(move) {
 }
 
 // ═══════════════════════════════════════════════════
-//  DAMAGE TEXT
+//  DAMAGE TEXT  ── upgraded: pop scale, heal green, crit punch
 // ═══════════════════════════════════════════════════
 function spawnDamageText(x, y, amount, isCrit = false) {
+  const isHeal = amount < 0;
   const style = new PIXI.TextStyle({
-    fontSize: isCrit ? 22 : 16,
-    fill: amount < 0 ? 0x7CFC00 : (isCrit ? 0xff1100 : 0xff4444),
+    fontSize: isCrit ? 24 : 17,
+    fill: isHeal ? 0x44ee66 : (isCrit ? 0xff2200 : 0xffffff),
     fontWeight: '900',
     dropShadow: true,
-    dropShadowBlur: 4,
+    dropShadowBlur: isCrit ? 6 : 3,
     dropShadowColor: 0x000000,
     dropShadowDistance: 0,
-    stroke: 0x000000,
-    strokeThickness: isCrit ? 4 : 3,
+    dropShadowAlpha: 0.85,
+    stroke: isHeal ? 0x006600 : 0x000000,
+    strokeThickness: isCrit ? 5 : 3,
   });
-  const text = new PIXI.Text(isCrit ? `${Math.abs(amount)}!` : `${Math.abs(amount)}`, style);
+  const label = isHeal
+    ? `+${Math.abs(amount)}`
+    : (isCrit ? `${Math.abs(amount)}!` : `${Math.abs(amount)}`);
+  const text = new PIXI.Text(label, style);
   text.anchor.set(0.5);
-  text.x = x + (Math.random() - 0.5) * 18;
+  text.x = x + (Math.random() - 0.5) * 20;
   text.y = y - 40;
   mapContainer.addChild(text);
   damageTexts.push({
     obj: text,
-    vy: -(2.2 + Math.random() * 0.8),
+    vy: -(2.4 + Math.random() * 0.8),
     life: 1.0,
-    decay: isCrit ? 0.016 : 0.020,
+    decay: isCrit ? 0.015 : 0.019,
+    isCrit,
+    popPhase: 1.0,   // counts down from 1 → drives initial scale pop
   });
 }
 
@@ -434,15 +446,19 @@ function updateDamageTexts() {
   for (let i = damageTexts.length - 1; i >= 0; i--) {
     const d = damageTexts[i];
     d.obj.y += d.vy;
-    d.vy *= 0.90;
+    d.vy *= 0.89;
     d.life -= d.decay;
-    d.obj.alpha = d.life > 0.4 ? 1.0 : d.life / 0.4;
-    if (d.obj.style.fontSize > 18 && d.life > 0.85) {
-      const s = 1.0 + (d.life - 0.85) * 2.5;
-      d.obj.scale.set(s);
+
+    // Pop: start oversized, ease to 1.0 quickly
+    if (d.popPhase > 0) {
+      d.popPhase = Math.max(0, d.popPhase - 0.10);
+      const scale = 1.0 + d.popPhase * (d.isCrit ? 0.5 : 0.25);
+      d.obj.scale.set(scale);
     } else {
       d.obj.scale.set(1.0);
     }
+
+    d.obj.alpha = d.life > 0.4 ? 1.0 : d.life / 0.4;
     if (d.life <= 0) {
       mapContainer.removeChild(d.obj);
       d.obj.destroy();
@@ -721,6 +737,11 @@ function removePlayerSprite(id) {
 function getOrCreateProj(id, type, radius) {
   if (projContainers[id]) return projContainers[id];
   const c = buildProjContainer(type, radius);
+  const p = projectiles[id];
+  if (p && p.renderX != null) {
+    c.x = p.renderX;
+    c.y = p.renderY;
+  }
   projLayer.addChild(c);
   projContainers[id] = c;
   return c;
@@ -766,7 +787,6 @@ function buildProjContainer(type, radius) {
     proj.addChild(dot);
   }
 
-  
   proj._bhParticles = Array.from({ length: 5 }, (_, i) => ({
   angle: (i / 5) * Math.PI * 2,
   radius: r * (1.1 + Math.random() * 0.2),
@@ -788,6 +808,72 @@ function buildProjContainer(type, radius) {
   inner.name = 'vpInner';
 
   proj.addChild(outer, inner);
+  break;
+}
+case 'holysmite': {
+  for (let i = 0; i < 8; i++) {
+    const glow = new PIXI.Graphics();
+    glow.name = `smiteGlow${i}`;
+    proj.addChild(glow);
+
+    const sw = new PIXI.Sprite(texCache.holySword);
+    sw.anchor.set(0.5);
+    sw.scale.set(0.05);
+    sw.alpha = 0;
+    sw.name = `smiteSword${i}`;
+    proj.addChild(sw);
+  }
+
+  const pulse = new PIXI.Graphics();
+  pulse.name = 'smitePulse';
+  proj.addChild(pulse);
+
+  proj._smite = {
+    dist: Array(8).fill(0.5),
+    delay: Array(8).fill(60),
+    fadeIn: Array(8).fill(0), // 0 to 1
+    done: false,
+    explodeTime: null,
+  };
+  break;
+}
+case 'crusadepull': {
+  const ring = new PIXI.Graphics();
+  ring.name = 'cpRing';
+  proj.addChild(ring);
+
+  for (let i = 0; i < 18; i++) {
+    const dot = new PIXI.Graphics();
+    const isYellow = i % 3 === 0;
+    dot.beginFill(isYellow ? 0xffd700 : 0xffffff, 0.9);
+    dot.drawCircle(0, 0, 2.5 + Math.random() * 2);
+    dot.endFill();
+    dot.name = `cpDot${i}`;
+    proj.addChild(dot);
+  }
+
+  proj._cpParticles = Array.from({ length: 18 }, (_, i) => {
+    const angle = (i / 18) * Math.PI * 2 + Math.random() * 0.3;
+    return {
+      angle,
+      dist: 0.85 + Math.random() * 0.15,
+      speed: 0.018 + Math.random() * 0.012,
+    };
+  });
+  break;
+}case 'crusadecharge': {
+  const glow = new PIXI.Graphics();
+  glow.name = 'wingGlow';
+
+  const wingL = new PIXI.Sprite(texCache.crusadeWing);
+  wingL.anchor.set(0.5);
+  wingL.name = 'wingL';
+
+  const wingR = new PIXI.Sprite(texCache.crusadeWing);
+  wingR.anchor.set(0.5);
+  wingR.name = 'wingR';
+
+  proj.addChild(glow, wingL, wingR);
   break;
 }
 case 'voidorb': {
@@ -907,8 +993,10 @@ case 'voidorb': {
 
 function updateProjSprite(id, p, now) {
   const c = getOrCreateProj(id, p.type, p.radius);
+  if (p.type !== 'crusadecharge') {
   c.x = p.renderX;
   c.y = p.renderY;
+}
   const r = Math.max(5, p.radius || 10);
 
   switch (p.type) {
@@ -942,13 +1030,159 @@ function updateProjSprite(id, p, now) {
       const pct = i / len;
       const alpha = pct * 0.55;
       const size = r * (0.3 + pct * 0.6);
-      // offset relative to current orb position
       const tx = c._orbHistory[i].x - p.renderX;
       const ty = c._orbHistory[i].y - p.renderY;
       trail.beginFill(0x2a0a3a, alpha);
       trail.drawCircle(tx, ty, size);
       trail.endFill();
     }
+  }
+  break;
+}
+case 'holysmite': {
+  const sm = c._smite;
+  if (!sm) break;
+
+  const spawnR = r;
+  const angles = Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2);
+
+  if (!sm.done) {
+    let allArrived = true;
+    for (let i = 0; i < 8; i++) {
+      // Fade in during delay period
+      if (sm.delay[i] > 0) {
+        sm.delay[i]--;
+        sm.fadeIn[i] = Math.min(1, sm.fadeIn[i] + 0.04);
+      } else {
+        sm.dist[i] = Math.max(0, sm.dist[i] - 0.045);
+        sm.fadeIn[i] = 1;
+      }
+      if (sm.dist[i] > 0) allArrived = false;
+
+      const ang = angles[i];
+      const d = sm.dist[i] * spawnR;
+      const fade = sm.fadeIn[i];
+
+      const sw = c.getChildByName(`smiteSword${i}`);
+      if (sw) {
+        sw.x = Math.cos(ang) * d;
+        sw.y = Math.sin(ang) * d;
+        sw.rotation = ang + Math.PI;
+        sw.alpha = fade;
+      }
+
+      const glow = c.getChildByName(`smiteGlow${i}`);
+      if (glow) {
+        glow.clear();
+        glow.x = Math.cos(ang) * d;
+        glow.y = Math.sin(ang) * d;
+        glow.beginFill(0xffd700, 0.12 * fade);
+        glow.drawCircle(0, 0, 22);
+        glow.endFill();
+        glow.beginFill(0xffe566, 0.07 * fade);
+        glow.drawCircle(0, 0, 34);
+        glow.endFill();
+      }
+    }
+
+    if (allArrived && !sm.explodeTime) {
+      sm.explodeTime = now;
+      sm.done = true;
+      for (let i = 0; i < 8; i++) {
+        const sw = c.getChildByName(`smiteSword${i}`);
+        const glow = c.getChildByName(`smiteGlow${i}`);
+        if (sw) sw.alpha = 0;
+        if (glow) glow.clear();
+      }
+    }
+  }
+
+  const pulse = c.getChildByName('smitePulse');
+  if (pulse && sm.explodeTime) {
+    const elapsed = now - sm.explodeTime;
+    const duration = 500;
+    const t = Math.min(elapsed / duration, 1);
+    pulse.clear();
+    if (t < 1) {
+      const pulseR = t * r * 2.2;
+      const alpha = (1 - t) * 0.85;
+      pulse.lineStyle(6, 0xffd700, alpha * 0.6);
+      pulse.drawCircle(0, 0, pulseR);
+      pulse.lineStyle(0);
+      pulse.beginFill(0xffe566, alpha * 0.25);
+      pulse.drawCircle(0, 0, pulseR * 0.6);
+      pulse.endFill();
+      if (t < 0.25) {
+        const coreAlpha = (1 - t / 0.25) * 0.9;
+        pulse.beginFill(0xffffff, coreAlpha);
+        pulse.drawCircle(0, 0, pulseR * 0.3);
+        pulse.endFill();
+      }
+    }
+  }
+  break;
+}
+case 'crusadepull': {
+  const ring = c.getChildByName('cpRing');
+  if (ring) {
+    ring.clear();
+    ring.lineStyle(2.5, 0xffffff, 0.35);
+    ring.drawCircle(0, 0, r);
+    ring.lineStyle(1, 0xffd700, 0.15);
+    ring.drawCircle(0, 0, r - 4);
+  }
+
+  if (c._cpParticles) {
+    for (let i = 0; i < c._cpParticles.length; i++) {
+      const pd = c._cpParticles[i];
+      const dot = c.getChildByName(`cpDot${i}`);
+      if (!dot) continue;
+      pd.dist -= pd.speed;
+      if (pd.dist <= 0.04) {
+        pd.dist = 0.8 + Math.random() * 0.2;
+        pd.angle = Math.random() * Math.PI * 2;
+        pd.speed = 0.018 + Math.random() * 0.012;
+      }
+      dot.x = Math.cos(pd.angle) * pd.dist * r;
+      dot.y = Math.sin(pd.angle) * pd.dist * r;
+      const pct = pd.dist;
+      dot.alpha = 0.3 + pct * 0.7;
+      dot.scale.set(0.4 + pct * 0.6);
+    }
+  }
+  break;
+}case 'crusadecharge': {
+  c.x = lerp(c.x, p.renderX, 0.35);
+  c.y = lerp(c.y, p.renderY, 0.35);
+
+  const wingL = c.getChildByName('wingL');
+  const wingR = c.getChildByName('wingR');
+  const glow  = c.getChildByName('wingGlow');
+  const scale = (r * 2) / 350;
+  const spread = r * 1.5;
+
+  if (glow) {
+    glow.clear();
+    const pulse = 0.1 + 0.05 * Math.sin(now / 200);
+    glow.beginFill(0xffd700, pulse * 0.5);
+    glow.drawCircle(0, 0, spread * 1.3);
+    glow.endFill();
+    glow.beginFill(0xffe566, pulse);
+    glow.drawCircle(0, 0, spread * 0.7);
+    glow.endFill();
+  }
+
+  if (wingL) {
+    wingL.rotation = p.dir + Math.PI;
+    wingL.scale.set(scale, scale);
+    wingL.x = Math.cos(p.dir + Math.PI / 2) * spread;
+    wingL.y = Math.sin(p.dir + Math.PI / 2) * spread;
+  }
+  if (wingR) {
+    wingR.rotation = p.dir + Math.PI;
+    wingR.scale.set(scale, -scale);
+    wingR.x = Math.cos(p.dir - Math.PI / 2) * spread;
+    wingR.y = Math.sin(p.dir - Math.PI / 2) * spread;
   }
   break;
 }
@@ -978,7 +1212,6 @@ function updateProjSprite(id, p, now) {
 
       dot.x = Math.cos(pd.angle) * pd.radius;
       dot.y = Math.sin(pd.angle) * pd.radius;
-      // Fade and shrink as they get closer to center
       const pct = pd.radius / (r * 1.4);
       dot.alpha = pct;
       dot.scale.set(0.3 + pct * 0.7);
@@ -1095,41 +1328,46 @@ function getOrCreateObstacle(id, ob) {
 }
 
 // ═══════════════════════════════════════════════════
-//  UI
+//  UI  ── skill bars + mana bar upgraded
 // ═══════════════════════════════════════════════════
 let _ui = null;
 
 function initUI() {
   const W = app.screen.width, H = app.screen.height;
-  const sbW = 80, sbH = 14, sbGap = 28, totalW = sbW * 3 + sbGap * 2;
-  const startX = W / 2 - totalW / 2, barY = H - 35;
+
+  // ── Skill bars: slightly taller, cleaner track, key badge above ──
+  const sbW = 84, sbH = 16, sbGap = 26, totalW = sbW * 3 + sbGap * 2;
+  const startX = W / 2 - totalW / 2, barY = H - 42;
+
   const lbW = 200, lbX = W - lbW - 10, lbY = 10;
   const mmSize = 180, mmX = 10, mmY = H - mmSize - 10;
 
+  // Key badges (Q / E / F) — small dark pill above each bar
   const skillBadges = [0, 1, 2].map(i => {
     const badge = new PIXI.Graphics();
-    badge.lineStyle(2, 0x000000, 0.9);
-    badge.beginFill(0x111111, 0.85);
-    badge.drawRoundedRect(startX + i * (sbW + sbGap) + sbW / 2 - 11, barY - 30, 22, 22, 5);
+    badge.lineStyle(1.5, 0x000000, 0.7);
+    badge.beginFill(0x111111, 0.88);
+    badge.drawRoundedRect(startX + i * (sbW + sbGap) + sbW / 2 - 11, barY - 26, 22, 20, 5);
     badge.endFill();
     uiContainer.addChild(badge);
     return badge;
   });
 
   const skillLabels = ['Q', 'E', 'F'].map((key, i) => {
-    const t = new PIXI.Text(key, { fontSize: 13, fill: 0xffffff, fontWeight: '700' });
+    const t = new PIXI.Text(key, { fontSize: 12, fill: 0xcccccc, fontWeight: '700' });
     t.anchor.set(0.5);
     t.x = startX + sbW / 2 + i * (sbW + sbGap);
-    t.y = barY - 19;
+    t.y = barY - 16;
     uiContainer.addChild(t);
     return t;
   });
 
+  // Bar tracks — dark bg with thin border
   const skillBgs = [0, 1, 2].map(i => {
     const bg = new PIXI.Graphics();
-    bg.lineStyle(2.5, 0x000000, 1.0);
-    bg.beginFill(0x0a0a0a, 0.80);
-    bg.drawRoundedRect(startX + i * (sbW + sbGap), barY, sbW, sbH, 6);
+    bg.lineStyle(1.5, 0x000000, 0.9);
+    bg.beginFill(0x0d0d0d, 0.82);
+    bg.drawRoundedRect(startX + i * (sbW + sbGap), barY, sbW, sbH, 7);
     bg.endFill();
     uiContainer.addChild(bg);
     return bg;
@@ -1198,7 +1436,6 @@ function initUI() {
   cpText.y = cpBarY + cpBarH / 2;
   uiContainer.addChild(cpText);
 
-  // Gamemode 1: centered team score at top (three separate texts for per-team coloring)
   const tdmScore0 = new PIXI.Text('', { fontSize: 22, fill: 0x4488ff, fontWeight: '700', dropShadow: true, dropShadowDistance: 2, dropShadowAlpha: 0.7 });
   tdmScore0.anchor.set(1, 0);
   tdmScore0.y = 10;
@@ -1216,7 +1453,6 @@ function initUI() {
   tdmScore1.visible = false;
   uiContainer.addChild(tdmScore1);
 
-  // Gamemode 2: scores flanking the capture bar
   const cpScore0 = new PIXI.Text('', { fontSize: 18, fill: 0x4488ff, fontWeight: '700', dropShadow: true, dropShadowDistance: 2, dropShadowAlpha: 0.7 });
   cpScore0.anchor.set(1, 0.5);
   cpScore0.x = cpBarX - 10;
@@ -1268,7 +1504,7 @@ function removePlayerUI(id) {
   uiContainer.removeChild(ui.hfill); ui.hfill.destroy();
   uiContainer.removeChild(ui.mbg);   ui.mbg.destroy();
   uiContainer.removeChild(ui.mfill); ui.mfill.destroy();
-delete uiPlayerUI[id];
+  delete uiPlayerUI[id];
   const dot = uiMmDots[id];
   if (dot) { uiContainer.removeChild(dot); dot.destroy(); delete uiMmDots[id]; }
 }
@@ -1277,6 +1513,7 @@ const uiMmDots = {};
 
 function drawUI(now, pl) {
   if (!_ui) return;
+  dbgSet('dbg-fps', `⬤ FPS: ${Math.round(app.ticker.FPS)}`, app.ticker.FPS > 50 ? 'ok' : app.ticker.FPS > 30 ? 'warn' : 'error');
   const { skillFills, sbW, sbH, sbGap, startX, barY, lbBg, lbRows, lbW, lbX, lbY, mmSize, mmX, mmY,
     cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond,
     tdmScore0, tdmSep, tdmScore1, cpScore0, cpScore1,
@@ -1291,21 +1528,30 @@ function drawUI(now, pl) {
   const hpPct = hp / 100;
   hpStatText.style.fill = hpPct > 0.6 ? 0x44ee66 : hpPct > 0.3 ? 0xffcc22 : 0xff4444;
 
+  // ── Skill cooldown bars ── polished fill with gloss
   const cds = [pl.renderSkill1cd ?? pl.skill1cd, pl.renderSkill2cd ?? pl.skill2cd, pl.renderSkill3cd ?? pl.skill3cd];
   cds.forEach((cd, i) => {
     const f = skillFills[i];
     const x = startX + i * (sbW + sbGap);
     f.clear();
-    f.beginFill(0x222222, 0.5);
-    f.drawRoundedRect(x + 2, barY + 2, sbW - 4, sbH - 4, 4);
+
+    // Inner track (slightly inset from bg border)
+    f.beginFill(0x111111, 0.7);
+    f.drawRoundedRect(x + 2, barY + 2, sbW - 4, sbH - 4, 5);
     f.endFill();
+
     if (cd < 1) {
       const fillW = (sbW - 4) * (1 - cd);
-      f.beginFill(0x00ccff, 0.90);
-      f.drawRoundedRect(x + 2, barY + 2, fillW, sbH - 4, 4);
+      const isReady = (1 - cd) > 0.98;
+
+      // Main fill — teal when ready, lighter cyan while charging
+      f.beginFill(isReady ? 0x00ffcc : 0x00aadd, 0.92);
+      f.drawRoundedRect(x + 2, barY + 2, fillW, sbH - 4, 5);
       f.endFill();
+
+      // Gloss highlight strip (top half)
       f.beginFill(0xffffff, 0.18);
-      f.drawRoundedRect(x + 2, barY + 2, fillW, (sbH - 4) / 2, 4);
+      f.drawRoundedRect(x + 2, barY + 2, fillW, (sbH - 4) * 0.45, 5);
       f.endFill();
     }
   });
@@ -1384,48 +1630,56 @@ function drawUI(now, pl) {
     nt.x = sx;
     nt.y = sy - 42 * zoom;
 
-    const bw = 52 * zoom, bh = 7 * zoom;
+    // ── Health bar — pill style, gloss highlight ──
+    const bw = 54 * zoom, bh = 8 * zoom, bR = 4;
     const bx = sx - bw / 2, by = sy + 26 * zoom;
-    const outlinePad = 1.5;
 
     hbg.clear();
-    hbg.beginFill(0x000000, 0.95);
-    hbg.drawRoundedRect(bx - outlinePad, by - outlinePad, bw + outlinePad * 2, bh + outlinePad * 2, 3);
+    // shadow
+    hbg.beginFill(0x000000, 0.5);
+    hbg.drawRoundedRect(bx + 1, by + 2, bw, bh, bR);
     hbg.endFill();
-    hbg.beginFill(0x111111, 0.80);
-    hbg.drawRoundedRect(bx, by, bw, bh, 2);
+    // track
+    hbg.lineStyle(1.5, 0x000000, 0.9);
+    hbg.beginFill(0x111111, 0.85);
+    hbg.drawRoundedRect(bx, by, bw, bh, bR);
     hbg.endFill();
 
     const hpct = Math.max(0, Math.min(1, (p.renderHealth ?? p.health) / 100));
     hfill.clear();
     if (hpct > 0) {
-      hfill.beginFill(hpct > 0.6 ? 0x44ee66 : hpct > 0.3 ? 0xffcc22 : 0xff2233, 0.95);
-      hfill.drawRoundedRect(bx, by, bw * hpct, bh, 2);
+      const hColor = hpct > 0.6 ? 0x44ee66 : hpct > 0.3 ? 0xffcc22 : 0xff2233;
+      hfill.beginFill(hColor, 0.95);
+      hfill.drawRoundedRect(bx + 1, by + 1, (bw - 2) * hpct, bh - 2, bR - 1);
       hfill.endFill();
-      hfill.beginFill(0xffffff, 0.15);
-      hfill.drawRoundedRect(bx, by, bw * hpct, bh / 2, 2);
+      // gloss
+      hfill.beginFill(0xffffff, 0.18);
+      hfill.drawRoundedRect(bx + 1, by + 1, (bw - 2) * hpct, (bh - 2) * 0.45, bR - 1);
       hfill.endFill();
     }
 
     if (id === myId) {
-      const mby = by + bh + 3, mbh = 5 * zoom;
+      // ── Mana bar — thinner, blue, same polish ──
+      const mby = by + bh + 3, mbh = 5 * zoom, mbR = 3;
       mbg.clear();
-      mbg.beginFill(0x000000, 0.95);
-      mbg.drawRoundedRect(bx - outlinePad, mby - outlinePad, bw + outlinePad * 2, mbh + outlinePad * 2, 3);
+      mbg.beginFill(0x000000, 0.5);
+      mbg.drawRoundedRect(bx + 1, mby + 2, bw, mbh, mbR);
       mbg.endFill();
-      mbg.beginFill(0x111111, 0.80);
-      mbg.drawRoundedRect(bx, mby, bw, mbh, 2);
+      mbg.lineStyle(1.5, 0x000000, 0.9);
+      mbg.beginFill(0x0a0a18, 0.85);
+      mbg.drawRoundedRect(bx, mby, bw, mbh, mbR);
       mbg.endFill();
       mbg.visible = true;
 
       const mpct = Math.max(0, Math.min(1, (p.renderMana ?? p.mana) / 100));
       mfill.clear();
       if (mpct > 0) {
-        mfill.beginFill(0x4488ff, 0.9);
-        mfill.drawRoundedRect(bx, mby, bw * mpct, mbh, 2);
+        mfill.beginFill(0x3399ff, 0.92);
+        mfill.drawRoundedRect(bx + 1, mby + 1, (bw - 2) * mpct, mbh - 2, mbR - 1);
         mfill.endFill();
-        mfill.beginFill(0xffffff, 0.12);
-        mfill.drawRoundedRect(bx, mby, bw * mpct, mbh / 2, 2);
+        // gloss
+        mfill.beginFill(0xffffff, 0.16);
+        mfill.drawRoundedRect(bx + 1, mby + 1, (bw - 2) * mpct, (mbh - 2) * 0.45, mbR - 1);
         mfill.endFill();
       }
       mfill.visible = true;
@@ -1444,7 +1698,6 @@ function drawUI(now, pl) {
     if (tdmScore1.text !== s1) tdmScore1.text = s1;
     tdmScore0.style.fill = myTeam === 0 ? 0x4488ff : 0xff3333;
     tdmScore1.style.fill = myTeam === 1 ? 0x4488ff : 0xff3333;
-    // position: left score right-anchored, right score left-anchored around center
     const W = app.screen.width;
     tdmSep.x = W / 2;
     tdmScore0.x = W / 2 - tdmSep.width / 2;
