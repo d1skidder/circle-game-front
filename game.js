@@ -795,19 +795,40 @@ function buildProjContainer(type, radius) {
 }));
   break;
 }case 'voidpull': {
-  const baseScale = (r * 2) / 512;
+  // Accretion disk A — wide horizontal
+  const diskA = new PIXI.Graphics();
+  diskA.name = 'vpDiskA';
+  diskA.beginFill(0x7020c0, 0.55);
+  diskA.drawEllipse(0, 0, r * 1.9, r * 0.45);
+  diskA.endFill();
+  diskA.beginFill(0xaa55ff, 0.25);
+  diskA.drawEllipse(0, 0, r * 1.55, r * 0.28);
+  diskA.endFill();
 
-  const outer = new PIXI.Sprite(texCache.voidOuter);
-  outer.anchor.set(0.5);
-  outer.scale.set(baseScale);
-  outer.name = 'vpOuter';
+  // Accretion disk B — tilted at ~60 deg
+  const diskB = new PIXI.Graphics();
+  diskB.name = 'vpDiskB';
+  diskB.beginFill(0x3a10a0, 0.5);
+  diskB.drawEllipse(0, 0, r * 1.7, r * 0.38);
+  diskB.endFill();
+  diskB.beginFill(0x8833ee, 0.2);
+  diskB.drawEllipse(0, 0, r * 1.35, r * 0.22);
+  diskB.endFill();
+  diskB.rotation = Math.PI / 3;
 
-  const inner = new PIXI.Sprite(texCache.voidInner);
-  inner.anchor.set(0.5);
-  inner.scale.set(baseScale * 0.6);
-  inner.name = 'vpInner';
+  // Black hole core
+  const core = new PIXI.Graphics();
+  core.name = 'vpCore';
+  // soft purple glow halo
+  core.beginFill(0x220044, 0.45);
+  core.drawCircle(0, 0, r * 1.05);
+  core.endFill();
+  // true black center
+  core.beginFill(0x000000, 1);
+  core.drawCircle(0, 0, r * 0.72);
+  core.endFill();
 
-  proj.addChild(outer, inner);
+  proj.addChild(diskA, diskB, core);
   break;
 }
 case 'holysmite': {
@@ -988,6 +1009,7 @@ case 'voidorb': {
       const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
   }
+  //const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
   return proj;
 }
 
@@ -1220,10 +1242,10 @@ case 'crusadepull': {
   break;
 }
 case 'voidpull': {
-  const outer = c.getChildByName('vpOuter');
-  const inner = c.getChildByName('vpInner');
-  if (outer) outer.rotation -= 0.02;
-  if (inner) inner.rotation += 0.035;
+  const diskA = c.getChildByName('vpDiskA');
+  const diskB = c.getChildByName('vpDiskB');
+  if (diskA) diskA.rotation -= 0.04;
+  if (diskB) diskB.rotation += 0.065;
   break;
 }
     case 'icicle':
@@ -1635,13 +1657,9 @@ function drawUI(now, pl) {
     const bx = sx - bw / 2, by = sy + 26 * zoom;
 
     hbg.clear();
-    // shadow
-    hbg.beginFill(0x000000, 0.5);
-    hbg.drawRoundedRect(bx + 1, by + 2, bw, bh, bR);
-    hbg.endFill();
     // track
-    hbg.lineStyle(1.5, 0x000000, 0.9);
-    hbg.beginFill(0x111111, 0.85);
+    hbg.lineStyle(1.5*zoom, 0x000000, 0.9);
+    hbg.beginFill(0x111111, 0.85*zoom);
     hbg.drawRoundedRect(bx, by, bw, bh, bR);
     hbg.endFill();
 
@@ -1660,12 +1678,9 @@ function drawUI(now, pl) {
 
     if (id === myId) {
       // ── Mana bar — thinner, blue, same polish ──
-      const mby = by + bh + 3, mbh = 5 * zoom, mbR = 3;
+      const mby = by + bh + 3 * zoom, mbh = 8 * zoom, mbR = 3;
       mbg.clear();
-      mbg.beginFill(0x000000, 0.5);
-      mbg.drawRoundedRect(bx + 1, mby + 2, bw, mbh, mbR);
-      mbg.endFill();
-      mbg.lineStyle(1.5, 0x000000, 0.9);
+      mbg.lineStyle(1.5*zoom, 0x000000, 0.85);
       mbg.beginFill(0x0a0a18, 0.85);
       mbg.drawRoundedRect(bx, mby, bw, mbh, mbR);
       mbg.endFill();
