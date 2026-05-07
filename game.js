@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = 'https://circle-game-5y2k.onrender.com'; // ── CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "https://circle-game-5y2k.onrender.com";
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -831,33 +831,6 @@ function buildProjContainer(type, radius) {
   proj.addChild(diskA, diskB, core);
   break;
 }
-case 'holysmite': {
-  for (let i = 0; i < 8; i++) {
-    const glow = new PIXI.Graphics();
-    glow.name = `smiteGlow${i}`;
-    proj.addChild(glow);
-
-    const sw = new PIXI.Sprite(texCache.holySword);
-    sw.anchor.set(0.5);
-    sw.scale.set(0.05);
-    sw.alpha = 0;
-    sw.name = `smiteSword${i}`;
-    proj.addChild(sw);
-  }
-
-  const pulse = new PIXI.Graphics();
-  pulse.name = 'smitePulse';
-  proj.addChild(pulse);
-
-  proj._smite = {
-    dist: Array(8).fill(0.5),
-    delay: Array(8).fill(60),
-    fadeIn: Array(8).fill(0), // 0 to 1
-    done: false,
-    explodeTime: null,
-  };
-  break;
-}
 case 'crusadepull': {
   const ring = new PIXI.Graphics();
   ring.name = 'cpRing';
@@ -1009,7 +982,7 @@ case 'voidorb': {
       const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
   }
-  //const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
+  //const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.7);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
   return proj;
 }
 
@@ -1057,89 +1030,6 @@ function updateProjSprite(id, p, now) {
       trail.beginFill(0x2a0a3a, alpha);
       trail.drawCircle(tx, ty, size);
       trail.endFill();
-    }
-  }
-  break;
-}
-case 'holysmite': {
-  const sm = c._smite;
-  if (!sm) break;
-
-  const spawnR = r;
-  const angles = Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2);
-
-  if (!sm.done) {
-    let allArrived = true;
-    for (let i = 0; i < 8; i++) {
-      // Fade in during delay period
-      if (sm.delay[i] > 0) {
-        sm.delay[i]--;
-        sm.fadeIn[i] = Math.min(1, sm.fadeIn[i] + 0.04);
-      } else {
-        sm.dist[i] = Math.max(0, sm.dist[i] - 0.045);
-        sm.fadeIn[i] = 1;
-      }
-      if (sm.dist[i] > 0) allArrived = false;
-
-      const ang = angles[i];
-      const d = sm.dist[i] * spawnR;
-      const fade = sm.fadeIn[i];
-
-      const sw = c.getChildByName(`smiteSword${i}`);
-      if (sw) {
-        sw.x = Math.cos(ang) * d;
-        sw.y = Math.sin(ang) * d;
-        sw.rotation = ang + Math.PI;
-        sw.alpha = fade;
-      }
-
-      const glow = c.getChildByName(`smiteGlow${i}`);
-      if (glow) {
-        glow.clear();
-        glow.x = Math.cos(ang) * d;
-        glow.y = Math.sin(ang) * d;
-        glow.beginFill(0xffd700, 0.12 * fade);
-        glow.drawCircle(0, 0, 22);
-        glow.endFill();
-        glow.beginFill(0xffe566, 0.07 * fade);
-        glow.drawCircle(0, 0, 34);
-        glow.endFill();
-      }
-    }
-
-    if (allArrived && !sm.explodeTime) {
-      sm.explodeTime = now;
-      sm.done = true;
-      for (let i = 0; i < 8; i++) {
-        const sw = c.getChildByName(`smiteSword${i}`);
-        const glow = c.getChildByName(`smiteGlow${i}`);
-        if (sw) sw.alpha = 0;
-        if (glow) glow.clear();
-      }
-    }
-  }
-
-  const pulse = c.getChildByName('smitePulse');
-  if (pulse && sm.explodeTime) {
-    const elapsed = now - sm.explodeTime;
-    const duration = 500;
-    const t = Math.min(elapsed / duration, 1);
-    pulse.clear();
-    if (t < 1) {
-      const pulseR = t * r * 2.2;
-      const alpha = (1 - t) * 0.85;
-      pulse.lineStyle(6, 0xffd700, alpha * 0.6);
-      pulse.drawCircle(0, 0, pulseR);
-      pulse.lineStyle(0);
-      pulse.beginFill(0xffe566, alpha * 0.25);
-      pulse.drawCircle(0, 0, pulseR * 0.6);
-      pulse.endFill();
-      if (t < 0.25) {
-        const coreAlpha = (1 - t / 0.25) * 0.9;
-        pulse.beginFill(0xffffff, coreAlpha);
-        pulse.drawCircle(0, 0, pulseR * 0.3);
-        pulse.endFill();
-      }
     }
   }
   break;
