@@ -195,7 +195,7 @@ function generateTextures() {
   texCache.voidMiddle = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidMiddleRingClean.png');
   texCache.voidInner  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidInnerRingClean.png');
   texCache.voidHand = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidHandClean.png');
-  texCache.crusadeWing = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/CrusadeWingClean.png');
+  texCache.crusadeWing = PIXI.Texture.from('assets/CrusadeWingClean.png');
   texCache.holySword = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/HolySwordClean.png');
   texCache.iceSword      = texCache.sword;
   texCache.rock          = makeRockTexture();
@@ -621,6 +621,11 @@ function buildPlayerContainer(c, gameClass) {
   // Armor overlay
   const armor = new PIXI.Graphics(); armor.name = 'armor'; c.addChild(armor);
 
+  // Charge wings — shown when isCharging is true
+  const wingGlow = new PIXI.Graphics(); wingGlow.name = 'wingGlow'; wingGlow.visible = false; c.addChild(wingGlow);
+  const wingL = new PIXI.Sprite(texCache.crusadeWing); wingL.anchor.set(0.5); wingL.name = 'wingL'; wingL.visible = false; c.addChild(wingL);
+  const wingR = new PIXI.Sprite(texCache.crusadeWing); wingR.anchor.set(0.5); wingR.name = 'wingR'; wingR.visible = false; c.addChild(wingR);
+
   // Name tag
   const nt = new PIXI.Text('', {
     fontSize: 16,
@@ -704,6 +709,36 @@ function updatePlayerSprite(id, p, now) {
         armor.lineTo(Math.cos(ang + 0.55) * 32, Math.sin(ang + 0.55) * 32);
         armor.lineTo(Math.cos(ang + 0.15) * 22, Math.sin(ang + 0.15) * 22);
         armor.closePath(); armor.endFill();
+      }
+    }
+  }
+
+  // ── CHARGING WINGS ──
+  const pWingL = c.getChildByName('wingL');
+  const pWingR = c.getChildByName('wingR');
+  const pWingGlow = c.getChildByName('wingGlow');
+  if (pWingL && pWingR) {
+    const charging = !!p.isCharging;
+    pWingL.visible = charging;
+    pWingR.visible = charging;
+    if (pWingGlow) pWingGlow.visible = charging;
+    if (charging) {
+      const wScale = 0.28;
+      const spread = 60;
+      // Container is already rotated to `facing`, so local +x = player forward, local ±y = sides
+      pWingL.rotation = Math.PI;
+      pWingL.scale.set(wScale, -wScale);
+      pWingL.x = -10;
+      pWingL.y = -spread;
+      pWingR.rotation = Math.PI;
+      pWingR.scale.set(wScale, wScale);
+      pWingR.x = -10;
+      pWingR.y = spread;
+      if (pWingGlow) {
+        pWingGlow.clear();
+        const pulse = 0.08 + 0.04 * Math.sin(now / 200);
+        pWingGlow.beginFill(0xffd700, pulse * 0.5); pWingGlow.drawCircle(0, 0, spread * 1.1); pWingGlow.endFill();
+        pWingGlow.beginFill(0xffe566, pulse); pWingGlow.drawCircle(0, 0, spread * 0.55); pWingGlow.endFill();
       }
     }
   }
@@ -856,18 +891,10 @@ case 'crusadepull': {
   });
   break;
 }case 'crusadecharge': {
-  const glow = new PIXI.Graphics();
-  glow.name = 'wingGlow';
-
-  const wingL = new PIXI.Sprite(texCache.crusadeWing);
-  wingL.anchor.set(0.5);
-  wingL.name = 'wingL';
-
-  const wingR = new PIXI.Sprite(texCache.crusadeWing);
-  wingR.anchor.set(0.5);
-  wingR.name = 'wingR';
-
-  proj.addChild(glow, wingL, wingR);
+  const chargeTrail = new PIXI.Graphics();
+  chargeTrail.name = 'chargeTrail';
+  proj.addChild(chargeTrail);
+  proj._trailHistory = [];
   break;
 }
 case 'voidorb': {
@@ -1067,34 +1094,23 @@ case 'crusadepull': {
   c.x = lerp(c.x, p.renderX, 0.35);
   c.y = lerp(c.y, p.renderY, 0.35);
 
-  const wingL = c.getChildByName('wingL');
-  const wingR = c.getChildByName('wingR');
-  const glow  = c.getChildByName('wingGlow');
-  const scale = (r * 2) / 350;
-  const spread = r * 1.5;
-
-  if (glow) {
-    glow.clear();
-    const pulse = 0.1 + 0.05 * Math.sin(now / 200);
-    glow.beginFill(0xffd700, pulse * 0.5);
-    glow.drawCircle(0, 0, spread * 1.3);
-    glow.endFill();
-    glow.beginFill(0xffe566, pulse);
-    glow.drawCircle(0, 0, spread * 0.7);
-    glow.endFill();
-  }
-
-  if (wingL) {
-    wingL.rotation = p.dir + Math.PI;
-    wingL.scale.set(scale, scale);
-    wingL.x = Math.cos(p.dir + Math.PI / 2) * spread;
-    wingL.y = Math.sin(p.dir + Math.PI / 2) * spread;
-  }
-  if (wingR) {
-    wingR.rotation = p.dir + Math.PI;
-    wingR.scale.set(scale, -scale);
-    wingR.x = Math.cos(p.dir - Math.PI / 2) * spread;
-    wingR.y = Math.sin(p.dir - Math.PI / 2) * spread;
+  const chargeTrail = c.getChildByName('chargeTrail');
+  if (chargeTrail && c._trailHistory != null) {
+    const jitter = 18;
+    c._trailHistory.push({
+      x: p.renderX + (Math.random() - 0.5) * jitter,
+      y: p.renderY + (Math.random() - 0.5) * jitter,
+      r: 2 + Math.random() * 6,
+    });
+    if (c._trailHistory.length > 22) c._trailHistory.shift();
+    chargeTrail.clear();
+    for (let i = 0; i < c._trailHistory.length; i++) {
+      const pt = c._trailHistory[i];
+      const pct = i / c._trailHistory.length;
+      chargeTrail.beginFill(0xffd700, pct * 0.75);
+      chargeTrail.drawCircle(pt.x - p.renderX, pt.y - p.renderY, pt.r * pct);
+      chargeTrail.endFill();
+    }
   }
   break;
 }
