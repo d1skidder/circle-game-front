@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "ws://localhost:8080";
+const WS_URL = "https://circle-game-5y2k.onrender.com";
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -621,6 +621,9 @@ function buildPlayerContainer(c, gameClass) {
   // Armor overlay
   const armor = new PIXI.Graphics(); armor.name = 'armor'; c.addChild(armor);
 
+  // Earth shield rings — counter-rotated so rocks orbit in world space
+  const earthShields = new PIXI.Container(); earthShields.name = 'earthShields'; c.addChild(earthShields);
+
   // Charge wings — shown when isCharging is true
   const wingGlow = new PIXI.Graphics(); wingGlow.name = 'wingGlow'; wingGlow.visible = false; c.addChild(wingGlow);
   const wingL = new PIXI.Sprite(texCache.crusadeWing); wingL.anchor.set(0.5); wingL.name = 'wingL'; wingL.visible = false; c.addChild(wingL);
@@ -710,6 +713,46 @@ function updatePlayerSprite(id, p, now) {
         armor.lineTo(Math.cos(ang + 0.15) * 22, Math.sin(ang + 0.15) * 22);
         armor.closePath(); armor.endFill();
       }
+    }
+  }
+
+  // ── EARTH SHIELDS ──
+  const earthShieldCt = c.getChildByName('earthShields');
+  if (earthShieldCt) {
+    const numRings = Math.min(p.earthShields ?? 0, 3);
+    const ROCKS_PER_RING = [5, 10, 15];
+    const RING_RADII     = [28, 42, 56];
+    const ROCK_PX        = 9; // sprite diameter in px (rock radius ~4.5 world units)
+    const ROCK_SCALE     = ROCK_PX / 100; // texCache.rock is 100×100
+
+    // Rebuild sprites only when the ring count changes
+    if (earthShieldCt._numRings !== numRings) {
+      earthShieldCt.removeChildren().forEach(ch => ch.destroy());
+      for (let ring = 0; ring < numRings; ring++) {
+        for (let i = 0; i < ROCKS_PER_RING[ring]; i++) {
+          const s = new PIXI.Sprite(texCache.rock);
+          s.anchor.set(0.5);
+          s.scale.set(ROCK_SCALE);
+          s._ring = ring;
+          s._idx  = i;
+          earthShieldCt.addChild(s);
+        }
+      }
+      earthShieldCt._numRings = numRings;
+    }
+
+    // Counter-rotate container so rocks orbit in world space
+    earthShieldCt.rotation = -c.rotation;
+
+    // Position each rock along its orbit
+    for (const s of earthShieldCt.children) {
+      const ring  = s._ring;
+      const dir   = ring % 2 === 0 ? 1 : -1;
+      const speed = 0.001 - ring * 0.0001;
+      const ang   = now * speed * dir + (s._idx / ROCKS_PER_RING[ring]) * Math.PI * 2;
+      s.x = Math.cos(ang) * RING_RADII[ring];
+      s.y = Math.sin(ang) * RING_RADII[ring];
+      s.rotation = ang; // face outward (optional, gives slight variance)
     }
   }
 
