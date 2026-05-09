@@ -673,10 +673,60 @@ function updatePlayerSprite(id, p, now) {
 
   c.rotation = facing + (p._swingAngle ?? 0);
 
+  // ── STUN TINT ──
+  const stunTint = p.isStunned ? 0xaaaacc : 0xffffff;
+  const body = c.getChildByName('body');
+  const arm1 = c.getChildByName('arm1');
+  const arm2 = c.getChildByName('arm2');
+  if (body) body.tint = stunTint;
+  if (arm1) arm1.tint = stunTint;
+  if (arm2) arm2.tint = stunTint;
+
   // ── AURA ──
   const aura = c.getChildByName('aura');
   if (aura) {
     aura.clear();
+    if (p.heatLevel > 0) {
+      const heat = p.heatLevel; // 1-3
+      const baseAlpha = 0.12 + heat * 0.1;
+      const ringAlpha = 0.25 + heat * 0.15;
+      const flareAlpha = 0.55 + heat * 0.15;
+      const outerR = 24 + heat * 4;
+      const pulse = Math.sin(now / (120 - heat * 25));
+      const flickerA = Math.sin(now / 60 + 1.3);
+      const flickerB = Math.sin(now / 80 + 2.7);
+
+      // Glow fill
+      aura.beginFill(0xff4400, baseAlpha + 0.04 * pulse); aura.drawCircle(0, 0, outerR); aura.endFill();
+      aura.beginFill(0xff6600, baseAlpha * 0.5); aura.drawCircle(0, 0, outerR * 0.6); aura.endFill();
+
+      // Pulsing rings
+      aura.lineStyle(1.5, 0xff3300, ringAlpha + 0.1 * pulse); aura.drawCircle(0, 0, outerR);
+      if (heat >= 2) {
+        aura.lineStyle(1, 0xff6600, (ringAlpha - 0.1) + 0.08 * pulse); aura.drawCircle(0, 0, outerR + 5 + heat);
+      }
+
+      // Rising flame licks
+      const flareCount = 3 + heat * 2;
+      for (let i = 0; i < flareCount; i++) {
+        const baseAng = (i / flareCount) * Math.PI * 2 + now / (500 - heat * 80);
+        const wobble = (i % 2 === 0 ? flickerA : flickerB) * 0.18;
+        const ang = baseAng + wobble;
+        const inner = outerR - 3;
+        const flareLen = (6 + heat * 4) * (0.75 + 0.25 * (i % 2 === 0 ? flickerA : flickerB));
+        const col = i % 2 === 0 ? 0xff4400 : 0xff8800;
+        aura.lineStyle(1.5 + heat * 0.5, col, flareAlpha);
+        aura.moveTo(Math.cos(ang) * inner, Math.sin(ang) * inner);
+        aura.lineTo(Math.cos(ang) * (inner + flareLen), Math.sin(ang) * (inner + flareLen));
+      }
+
+      // Level 3: extra intense inner core blaze
+      if (heat >= 3) {
+        aura.beginFill(0xff2200, 0.18 + 0.08 * pulse); aura.drawCircle(0, 0, 18); aura.endFill();
+        aura.lineStyle(2, 0xffaa00, 0.6 + 0.2 * pulse); aura.drawCircle(0, 0, outerR + 9);
+      }
+    }
+
     if (p.isFrenzy) {
       const r = 42 + Math.sin(now / 130) * 5;
       aura.lineStyle(2, 0xff0033, 0.6); aura.drawCircle(0, 0, r);
