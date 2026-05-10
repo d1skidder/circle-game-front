@@ -30,6 +30,7 @@ let lastMoveSend = 0;
 let app, mapContainer, uiContainer;
 let obstacleLayer, projLayer, playerLayer, trailLayer;
 let frenzyTrails = [];
+let lightningParticles = [];
 let mapBg = null;
 let capturePointGraphic = null;
 let playerContainers = {}, projContainers = {}, obstacleSprites = {};
@@ -174,6 +175,7 @@ function clearScene() {
   mapContainer.addChild(projLayer, obstacleLayer, trailLayer, playerLayer, capturePointGraphic);
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
   frenzyTrails = [];
+  lightningParticles = [];
 
   for (const d of damageTexts) {
     if (d.obj && !d.obj.destroyed) {
@@ -473,6 +475,18 @@ function updateDamageTexts() {
   }
 }
 
+function updateLightningParticles(now) {
+  const TTL = 60;
+  for (let i = lightningParticles.length - 1; i >= 0; i--) {
+    const t = lightningParticles[i];
+    if (now - t.born >= TTL) {
+      trailLayer.removeChild(t.g);
+      t.g.destroy();
+      lightningParticles.splice(i, 1);
+    }
+  }
+}
+
 function updateFrenzyTrails(now) {
   const DURATION = 400;
   for (let i = frenzyTrails.length - 1; i >= 0; i--) {
@@ -552,6 +566,7 @@ function gameLoop() {
   }
 
   updateDamageTexts();
+  updateLightningParticles(now);
   updateFrenzyTrails(now);
   drawUI(now, pl);
 }
@@ -765,15 +780,29 @@ function updatePlayerSprite(id, p, now) {
       aura.lineStyle(1, 0xff0033, 0.3); aura.drawCircle(0, 0, r + 7);
       aura.beginFill(0xff0033, 0.1); aura.drawCircle(0, 0, r); aura.endFill();
     } else if (p.isLightningSpeed) {
-      const r = 42 + Math.sin(now / 130) * 5;
-      aura.lineStyle(2, 0xffee22, 0.7); aura.drawCircle(0, 0, r);
-      aura.lineStyle(1, 0xffffff, 0.3); aura.drawCircle(0, 0, r + 5);
-      aura.beginFill(0xffee22, 0.12); aura.drawCircle(0, 0, r); aura.endFill();
-      aura.lineStyle(1.5, 0xffffff, 0.5);
-      for (let i = 0; i < 6; i++) {
-        const ang = now / 200 + i * Math.PI / 3;
-        aura.moveTo(Math.cos(ang) * (r - 4), Math.sin(ang) * (r - 4));
-        aura.lineTo(Math.cos(ang) * (r + 6), Math.sin(ang) * (r + 6));
+      if (trailLayer) {
+        const sparkCount = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < sparkCount; i++) {
+          const spark = new PIXI.Graphics();
+          const col = Math.random() < 0.5 ? 0xffee22 : 0xffffff;
+          spark.lineStyle(1.5, col, 0.8 + Math.random() * 0.2);
+          const startAng = Math.random() * Math.PI * 2;
+          const dist = 18 + Math.random() * 26;
+          let sx = Math.cos(startAng) * dist;
+          let sy = Math.sin(startAng) * dist;
+          spark.moveTo(sx, sy);
+          for (let j = 0; j < 3; j++) {
+            const jitAng = startAng + (Math.random() - 0.5) * 1.2;
+            const jitDist = 5 + Math.random() * 10;
+            sx += Math.cos(jitAng) * jitDist;
+            sy += Math.sin(jitAng) * jitDist;
+            spark.lineTo(sx, sy);
+          }
+          spark.x = p.renderX;
+          spark.y = p.renderY;
+          trailLayer.addChild(spark);
+          lightningParticles.push({ g: spark, born: now });
+        }
       }
     }
   }
@@ -1155,9 +1184,8 @@ function buildProjContainer(type, radius) {
     }
     case 'lightningspark': {
       const sp=new PIXI.Graphics();
-      for(let i=0;i<5;i++){const ang=(i/5)*Math.PI*2;sp.lineStyle(1.5,i%2===0?0xffee22:0xffffff,0.8);sp.moveTo(0,0);sp.lineTo(Math.cos(ang)*r*2,Math.sin(ang)*r*2);}
-      sp.beginFill(0xffffff,0.9);sp.drawCircle(0,0,r*0.5);sp.endFill();
-      sp.beginFill(0xffee88,0.4);sp.drawCircle(0,0,r*1.5);sp.endFill();
+      sp.beginFill(0xffee88,0.25);sp.drawCircle(0,0,r*0.9);sp.endFill();
+      sp.beginFill(0xffffff,0.95);sp.drawCircle(0,0,r*0.35);sp.endFill();
       proj.addChild(sp); break;
     }
     default: {
