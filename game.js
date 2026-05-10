@@ -1254,21 +1254,21 @@ case 'crusadepull': {
 
   const chargeTrail = c.getChildByName('chargeTrail');
   if (chargeTrail && c._trailHistory != null) {
-    const jitter = 24;
+    const jitter = 18;
     c._trailHistory.push({
       x: p.renderX + (Math.random() - 0.5) * jitter,
       y: p.renderY + (Math.random() - 0.5) * jitter,
-      r: 8 + Math.random() * 14,
+      r: 6 + Math.random() * 10,
     });
-    if (c._trailHistory.length > 40) c._trailHistory.shift();
+    if (c._trailHistory.length > 25) c._trailHistory.shift();
     chargeTrail.clear();
     for (let i = 0; i < c._trailHistory.length; i++) {
       const pt = c._trailHistory[i];
       const pct = i / c._trailHistory.length;
-      chargeTrail.beginFill(0xffd700, pct * 0.85);
+      chargeTrail.beginFill(0xffd700, pct * 0.6);
       chargeTrail.drawCircle(pt.x - p.renderX, pt.y - p.renderY, pt.r * pct);
       chargeTrail.endFill();
-      chargeTrail.beginFill(0xffffff, pct * 0.6);
+      chargeTrail.beginFill(0xffffff, pct * 0.4);
       chargeTrail.drawCircle(pt.x - p.renderX, pt.y - p.renderY, pt.r * pct * 0.45);
       chargeTrail.endFill();
     }
