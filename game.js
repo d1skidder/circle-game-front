@@ -911,7 +911,7 @@ function buildProjContainer(type, radius) {
   const r = Math.max(5, radius||10);
   const proj = new PIXI.Container();
   switch(type) {
-    case 'fireball': case 'chonkyfireball': case 'clusterfireball': {
+    case 'fireball': case 'chonkyfireball': {
       const base = r;
       const core = new PIXI.Graphics(); core.name='core';
       core.beginFill(0x881100,0.18); core.drawCircle(0,0,base*1.8); core.endFill();
@@ -919,6 +919,16 @@ function buildProjContainer(type, radius) {
       core.beginFill(0xff4400,1);    core.drawCircle(0,0,base);     core.endFill();
       core.beginFill(0xffcc44,0.9);  core.drawCircle(0,0,base*0.45); core.endFill();
       for(let i=0;i<5;i++){const w=new PIXI.Graphics();w.name=`wisp${i}`;proj.addChild(w);}
+      proj.addChild(core);
+      break;
+    }
+    case 'clusterfireball': {
+      const base = r;
+      const core = new PIXI.Graphics(); core.name='core';
+      core.beginFill(0x881100,0.18); core.drawCircle(0,0,base*1.8); core.endFill();
+      core.beginFill(0xcc2200,0.32); core.drawCircle(0,0,base*1.3); core.endFill();
+      core.beginFill(0xff4400,1);    core.drawCircle(0,0,base);     core.endFill();
+      core.beginFill(0xffcc44,0.9);  core.drawCircle(0,0,base*0.45); core.endFill();
       proj.addChild(core);
       break;
     }
@@ -1168,8 +1178,7 @@ function updateProjSprite(id, p, now) {
 
   switch (p.type) {
     case 'fireball':
-    case 'chonkyfireball':
-    case 'clusterfireball': {
+    case 'chonkyfireball': {
       const base = r;
       const dir = p.dir || 0;
 
@@ -1178,7 +1187,6 @@ function updateProjSprite(id, p, now) {
         if (!w) continue;
         w.clear();
 
-        // pct 0 = tail, 1 = just behind core; spacing scales with radius
         const pct = i / 4;
         const trailDist = (1 - pct) * base * 3.5;
         const tx = -Math.cos(dir) * trailDist;
@@ -1194,6 +1202,25 @@ function updateProjSprite(id, p, now) {
         w.beginFill(colors[i], alpha);
         w.drawCircle(tx + perpX, ty + perpY, wr);
         w.endFill();
+      }
+      break;
+    }
+    case 'clusterfireball': {
+      if (trailLayer) {
+        const particleColors = [0xff4400, 0xff8800, 0xffcc44, 0xcc2200, 0xff2200];
+        const count = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.random() * r * 1.4;
+          const dot = new PIXI.Graphics();
+          const col = particleColors[Math.floor(Math.random() * particleColors.length)];
+          const pr = 2 + Math.random() * r * 0.5;
+          dot.beginFill(col, 0.7 + Math.random() * 0.3); dot.drawCircle(0, 0, pr); dot.endFill();
+          dot.x = p.renderX + Math.cos(angle) * dist;
+          dot.y = p.renderY + Math.sin(angle) * dist;
+          trailLayer.addChild(dot);
+          frenzyTrails.push({ g: dot, born: now });
+        }
       }
       break;
     }
