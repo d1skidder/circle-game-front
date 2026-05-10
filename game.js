@@ -1058,7 +1058,7 @@ function buildProjContainer(type, radius) {
     }
     case 'snowstorm': {
       const bg2=new PIXI.Graphics();
-      bg2.beginFill(0xddeeff,0.22);bg2.drawCircle(0,0,r);bg2.endFill();
+      bg2.beginFill(0xddeeff,0.4);bg2.drawCircle(0,0,r);bg2.endFill();
       bg2.lineStyle(2,0xeef8ff,0.65);bg2.drawCircle(0,0,r);
       proj.addChild(bg2);
       for(let i=0;i<50;i++){
