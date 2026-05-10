@@ -28,7 +28,8 @@ const pressed = {};
 let lastMoveSend = 0;
 // ── PIXI OBJECTS ─────────────────────────────────
 let app, mapContainer, uiContainer;
-let obstacleLayer, projLayer, playerLayer;
+let obstacleLayer, projLayer, playerLayer, trailLayer;
+let frenzyTrails = [];
 let mapBg = null;
 let capturePointGraphic = null;
 let playerContainers = {}, projContainers = {}, obstacleSprites = {};
@@ -113,13 +114,13 @@ function checkReady() {
 function drawMapBg() {
   if (!mapBg) return;
   mapBg.clear();
-  mapBg.beginFill(0x3a8a3a);
+  mapBg.beginFill(0x427e3a);
   mapBg.drawRect(0, 0, MAP_DIM, MAP_DIM);
   mapBg.endFill();
-  mapBg.lineStyle(1, 0x2a7020, 0.4);
+  mapBg.lineStyle(1, 0x326420, 0.4);
   for (let x = 0; x <= MAP_DIM; x += 100) { mapBg.moveTo(x,0); mapBg.lineTo(x,MAP_DIM); }
   for (let y = 0; y <= MAP_DIM; y += 100) { mapBg.moveTo(0,y); mapBg.lineTo(MAP_DIM,y); }
-  mapBg.lineStyle(5, 0x1a4a1a, 1);
+  mapBg.lineStyle(5, 0x223e1a, 1);
   mapBg.drawRect(0, 0, MAP_DIM, MAP_DIM);
   // ── dim overlay ──
   mapBg.lineStyle(0);
@@ -132,7 +133,7 @@ function initPixi() {
   pixiReady = true;
   app = new PIXI.Application({
     resizeTo: document.getElementById('gameScreen'),
-    backgroundColor: 0x3a8a3a,
+    backgroundColor: 0x427e3a,
     antialias: true,
     resolution: window.devicePixelRatio || 1,
     autoDensity: true,
@@ -149,9 +150,10 @@ function initPixi() {
 
   obstacleLayer = new PIXI.Container();
   projLayer = new PIXI.Container();
+  trailLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(capturePointGraphic, projLayer, obstacleLayer, playerLayer);
+  mapContainer.addChild(capturePointGraphic, projLayer, obstacleLayer, trailLayer, playerLayer);
 
   generateTextures();
   initUI();
@@ -166,10 +168,12 @@ function clearScene() {
   }
   obstacleLayer = new PIXI.Container();
   projLayer = new PIXI.Container();
+  trailLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(projLayer, obstacleLayer, playerLayer, capturePointGraphic);
+  mapContainer.addChild(projLayer, obstacleLayer, trailLayer, playerLayer, capturePointGraphic);
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
+  frenzyTrails = [];
 
   for (const d of damageTexts) {
     if (d.obj && !d.obj.destroyed) {
@@ -199,7 +203,7 @@ function generateTextures() {
   texCache.voidHand = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidHandClean.png');
   texCache.crusadeWing = PIXI.Texture.from('assets/CrusadeWingClean.png');
   texCache.holySword = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/HolySwordClean.png');
-  texCache.iceSword      = texCache.sword;
+  texCache.iceSword      = PIXI.Texture.from('assets/iceblade.png');
   texCache.rock          = makeRockTexture();
 }
 
@@ -469,6 +473,23 @@ function updateDamageTexts() {
   }
 }
 
+function updateFrenzyTrails(now) {
+  const DURATION = 400;
+  for (let i = frenzyTrails.length - 1; i >= 0; i--) {
+    const t = frenzyTrails[i];
+    const age = now - t.born;
+    if (age >= DURATION) {
+      trailLayer.removeChild(t.g);
+      t.g.destroy();
+      frenzyTrails.splice(i, 1);
+    } else {
+      const p = 1 - age / DURATION;
+      t.g.alpha = p * 0.7;
+      t.g.scale.set(0.3 + p * 0.7);
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════
 //  GAME LOOP
 // ═══════════════════════════════════════════════════
@@ -531,6 +552,7 @@ function gameLoop() {
   }
 
   updateDamageTexts();
+  updateFrenzyTrails(now);
   drawUI(now, pl);
 }
 
@@ -653,6 +675,14 @@ function updatePlayerSprite(id, p, now) {
 
   c.x = p.renderX;
   c.y = p.renderY;
+
+  if (p.isFrenzy && trailLayer) {
+    const dot = new PIXI.Graphics();
+    dot.beginFill(0x990011, 0.7); dot.drawCircle(0, 0, 14 + Math.random() * 6); dot.endFill();
+    dot.x = p.renderX; dot.y = p.renderY;
+    trailLayer.addChild(dot);
+    frenzyTrails.push({ g: dot, born: Date.now() });
+  }
 
   const facing = p.renderDir ?? p.dir;
 
@@ -884,128 +914,130 @@ function buildProjContainer(type, radius) {
     case 'fireball': case 'chonkyfireball': case 'clusterfireball': {
       const base = r;
       const core = new PIXI.Graphics(); core.name='core';
-      core.beginFill(0xff6600,0.2); core.drawCircle(0,0,base*1.8); core.endFill();
-      core.beginFill(0xff4400,0.35); core.drawCircle(0,0,base*1.3); core.endFill();
-      core.beginFill(0xff2200,1); core.drawCircle(0,0,base); core.endFill();
-      core.beginFill(0xffdd88,0.9); core.drawCircle(0,0,base*0.45); core.endFill();
-      proj.addChild(core);
+      core.beginFill(0x881100,0.18); core.drawCircle(0,0,base*1.8); core.endFill();
+      core.beginFill(0xcc2200,0.32); core.drawCircle(0,0,base*1.3); core.endFill();
+      core.beginFill(0xff4400,1);    core.drawCircle(0,0,base);     core.endFill();
+      core.beginFill(0xffcc44,0.9);  core.drawCircle(0,0,base*0.45); core.endFill();
       for(let i=0;i<5;i++){const w=new PIXI.Graphics();w.name=`wisp${i}`;proj.addChild(w);}
+      proj.addChild(core);
       break;
     }
     case 'blackhole': {
-  const baseScale = (r * 2) / 512;
+      const baseScale = (r * 2) / 512;
 
-  const center = new PIXI.Graphics();
-  center.beginFill(0x000000, 0.85);
-  center.drawCircle(0, 0, r * 0.6);
-  center.endFill();
-  center.name = 'bhCenter';
+      const center = new PIXI.Graphics();
+      center.beginFill(0x000000, 0.85);
+      center.drawCircle(0, 0, r * 0.6);
+      center.endFill();
+      center.name = 'bhCenter';
 
-  const outer = new PIXI.Sprite(texCache.voidOuter);
-  outer.anchor.set(0.5); outer.scale.set(baseScale); outer.name = 'voidOuter';
-  const middle = new PIXI.Sprite(texCache.voidMiddle);
-  middle.anchor.set(0.5); middle.scale.set(baseScale * 1); middle.name = 'voidMiddle';
-  const inner = new PIXI.Sprite(texCache.voidInner);
-  inner.anchor.set(0.5); inner.scale.set(baseScale * 0.5); inner.name = 'voidInner';
-      proj.addChild(center, outer, middle, inner);
-  for (let i = 0; i < 5; i++) {
-    const dot = new PIXI.Graphics();
-    dot.name = `bhDot${i}`;
-    dot.beginFill(i % 2 === 0 ? 0x9955cc : 0x1a0a2a, 0.9);
-    dot.drawCircle(0, 0, 20 + Math.random() * 4);
-    dot.endFill();
-    proj.addChild(dot);
-  }
+      const outer = new PIXI.Sprite(texCache.voidOuter);
+      outer.anchor.set(0.5); outer.scale.set(baseScale); outer.name = 'voidOuter';
+      const middle = new PIXI.Sprite(texCache.voidMiddle);
+      middle.anchor.set(0.5); middle.scale.set(baseScale * 1); middle.name = 'voidMiddle';
+      const inner = new PIXI.Sprite(texCache.voidInner);
+      inner.anchor.set(0.5); inner.scale.set(baseScale * 0.5); inner.name = 'voidInner';
+          proj.addChild(center, outer, middle, inner);
+      for (let i = 0; i < 5; i++) {
+        const dot = new PIXI.Graphics();
+        dot.name = `bhDot${i}`;
+        dot.beginFill(i % 2 === 0 ? 0x9955cc : 0x1a0a2a, 0.9);
+        dot.drawCircle(0, 0, 20 + Math.random() * 4);
+        dot.endFill();
+        proj.addChild(dot);
+      }
 
-  proj._bhParticles = Array.from({ length: 5 }, (_, i) => ({
-  angle: (i / 5) * Math.PI * 2,
-  radius: r * (1.1 + Math.random() * 0.2),
-  speed: 0.02 + Math.random() * 0.02,
-  inSpeed: 2.5 + Math.random() * 1.5,
-}));
-  break;
-}case 'voidpull': {
-  // Accretion disk A — wide horizontal
-  const diskA = new PIXI.Graphics();
-  diskA.name = 'vpDiskA';
-  diskA.beginFill(0x7020c0, 0.55);
-  diskA.drawEllipse(0, 0, r * 1.9, r * 0.45);
-  diskA.endFill();
-  diskA.beginFill(0xaa55ff, 0.25);
-  diskA.drawEllipse(0, 0, r * 1.55, r * 0.28);
-  diskA.endFill();
+      proj._bhParticles = Array.from({ length: 5 }, (_, i) => ({
+      angle: (i / 5) * Math.PI * 2,
+      radius: r * (1.1 + Math.random() * 0.2),
+      speed: 0.02 + Math.random() * 0.02,
+      inSpeed: 2.5 + Math.random() * 1.5,
+    }));
+      break;
+    }
+    case 'voidpull': {
+      // Accretion disk A — wide horizontal
+      const diskA = new PIXI.Graphics();
+      diskA.name = 'vpDiskA';
+      diskA.beginFill(0x7020c0, 0.55);
+      diskA.drawEllipse(0, 0, r * 1.9, r * 0.45);
+      diskA.endFill();
+      diskA.beginFill(0xaa55ff, 0.25);
+      diskA.drawEllipse(0, 0, r * 1.55, r * 0.28);
+      diskA.endFill();
 
-  // Accretion disk B — tilted at ~60 deg
-  const diskB = new PIXI.Graphics();
-  diskB.name = 'vpDiskB';
-  diskB.beginFill(0x3a10a0, 0.5);
-  diskB.drawEllipse(0, 0, r * 1.7, r * 0.38);
-  diskB.endFill();
-  diskB.beginFill(0x8833ee, 0.2);
-  diskB.drawEllipse(0, 0, r * 1.35, r * 0.22);
-  diskB.endFill();
-  diskB.rotation = Math.PI / 3;
+      // Accretion disk B — tilted at ~60 deg
+      const diskB = new PIXI.Graphics();
+      diskB.name = 'vpDiskB';
+      diskB.beginFill(0x3a10a0, 0.5);
+      diskB.drawEllipse(0, 0, r * 1.7, r * 0.38);
+      diskB.endFill();
+      diskB.beginFill(0x8833ee, 0.2);
+      diskB.drawEllipse(0, 0, r * 1.35, r * 0.22);
+      diskB.endFill();
+      diskB.rotation = Math.PI / 3;
 
-  // Black hole core
-  const core = new PIXI.Graphics();
-  core.name = 'vpCore';
-  // soft purple glow halo
-  core.beginFill(0x220044, 0.45);
-  core.drawCircle(0, 0, r * 1.05);
-  core.endFill();
-  // true black center
-  core.beginFill(0x000000, 1);
-  core.drawCircle(0, 0, r * 0.72);
-  core.endFill();
+      // Black hole core
+      const core = new PIXI.Graphics();
+      core.name = 'vpCore';
+      // soft purple glow halo
+      core.beginFill(0x220044, 0.45);
+      core.drawCircle(0, 0, r * 1.05);
+      core.endFill();
+      // true black center
+      core.beginFill(0x000000, 1);
+      core.drawCircle(0, 0, r * 0.72);
+      core.endFill();
 
-  proj.addChild(diskA, diskB, core);
-  break;
-}
-case 'crusadepull': {
-  const ring = new PIXI.Graphics();
-  ring.name = 'cpRing';
-  proj.addChild(ring);
+      proj.addChild(diskA, diskB, core);
+      break;
+    }
+    case 'crusadepull': {
+      const ring = new PIXI.Graphics();
+      ring.name = 'cpRing';
+      proj.addChild(ring);
 
-  for (let i = 0; i < 18; i++) {
-    const dot = new PIXI.Graphics();
-    const isYellow = i % 3 === 0;
-    dot.beginFill(isYellow ? 0xffd700 : 0xffffff, 0.9);
-    dot.drawCircle(0, 0, 2.5 + Math.random() * 2);
-    dot.endFill();
-    dot.name = `cpDot${i}`;
-    proj.addChild(dot);
-  }
+      for (let i = 0; i < 18; i++) {
+        const dot = new PIXI.Graphics();
+        const isYellow = i % 3 === 0;
+        dot.beginFill(isYellow ? 0xffd700 : 0xffffff, 0.9);
+        dot.drawCircle(0, 0, 2.5 + Math.random() * 2);
+        dot.endFill();
+        dot.name = `cpDot${i}`;
+        proj.addChild(dot);
+      }
 
-  proj._cpParticles = Array.from({ length: 18 }, (_, i) => {
-    const angle = (i / 18) * Math.PI * 2 + Math.random() * 0.3;
-    return {
-      angle,
-      dist: 0.85 + Math.random() * 0.15,
-      speed: 0.018 + Math.random() * 0.012,
-    };
-  });
-  break;
-}case 'crusadecharge': {
-  const chargeTrail = new PIXI.Graphics();
-  chargeTrail.name = 'chargeTrail';
-  proj.addChild(chargeTrail);
-  proj._trailHistory = [];
-  break;
-}
-case 'voidorb': {
-  const trail = new PIXI.Graphics();
-  trail.name = 'voidOrbTrail';
+      proj._cpParticles = Array.from({ length: 18 }, (_, i) => {
+        const angle = (i / 18) * Math.PI * 2 + Math.random() * 0.3;
+        return {
+          angle,
+          dist: 0.85 + Math.random() * 0.15,
+          speed: 0.018 + Math.random() * 0.012,
+        };
+      });
+      break;
+    }
+    case 'crusadecharge': {
+      const chargeTrail = new PIXI.Graphics();
+      chargeTrail.name = 'chargeTrail';
+      proj.addChild(chargeTrail);
+      proj._trailHistory = [];
+      break;
+    }
+    case 'voidorb': {
+      const trail = new PIXI.Graphics();
+      trail.name = 'voidOrbTrail';
 
-  const body = new PIXI.Graphics();
-  body.beginFill(0x000000, 0.95);
-  body.drawCircle(0, 0, r);
-  body.endFill();
-  body.name = 'voidOrbBody';
+      const body = new PIXI.Graphics();
+      body.beginFill(0x000000, 0.95);
+      body.drawCircle(0, 0, r);
+      body.endFill();
+      body.name = 'voidOrbBody';
 
-  proj.addChild(trail, body);
-  proj._orbHistory = [];
-  break;
-}
+      proj.addChild(trail, body);
+      proj._orbHistory = [];
+      break;
+    }
     case 'icicle': {
       const ic=new PIXI.Graphics();
       ic.beginFill(0xeeffff,0.95);
@@ -1017,36 +1049,59 @@ case 'voidorb': {
     }
     case 'iceblade': {
       const aura2=new PIXI.Graphics();
-      aura2.beginFill(0x44aaff,0.15);aura2.drawCircle(0,0,r*1.2);aura2.endFill();
+      aura2.beginFill(0x44aaff,0.3);aura2.drawCircle(0,0,r);aura2.endFill();
       const ring=new PIXI.Graphics();
       ring.lineStyle(1.5,0x88ddff,0.3);ring.drawCircle(0,0,r);
       const blade=new PIXI.Sprite(texCache.iceSword);
-      blade.anchor.set(0.5);blade.width=r*2;blade.height=r*2;
+      blade.anchor.set(0.5);blade.width=r*3.8;blade.height=r*3.8;
       proj.addChild(aura2,ring,blade); break;
     }
     case 'snowstorm': {
       const bg2=new PIXI.Graphics();
-      bg2.beginFill(0xbbddff,0.12);bg2.drawCircle(0,0,r);bg2.endFill();
-      bg2.lineStyle(2,0xaaddff,0.35);bg2.drawCircle(0,0,r*0.8);
+      bg2.beginFill(0xddeeff,0.22);bg2.drawCircle(0,0,r);bg2.endFill();
+      bg2.lineStyle(2,0xeef8ff,0.65);bg2.drawCircle(0,0,r);
       proj.addChild(bg2);
-      for(let i=0;i<18;i++){
-        const d=new PIXI.Graphics();d.beginFill(0xeef8ff,0.9);d.drawCircle(0,0,i%3===0?3:2);d.endFill();
+      for(let i=0;i<50;i++){
+        const d=new PIXI.Graphics();d.beginFill(0xffffff,1.0);d.drawCircle(0,0,i%3===0?3.5:2);d.endFill();
+        const spawnAng=Math.random()*Math.PI*2, spawnR=Math.random()*r*0.85;
+        d.x=Math.cos(spawnAng)*spawnR; d.y=Math.sin(spawnAng)*spawnR;
+        const velAng=Math.random()*Math.PI*2, speed=3+Math.random()*4;
+        d._vx=Math.cos(velAng)*speed; d._vy=Math.sin(velAng)*speed;
         d.name=`dot${i}`;proj.addChild(d);
       }
-      const flake=new PIXI.Graphics();flake.lineStyle(2,0xffffff,0.7);
-      for(let i=0;i<6;i++){
-        const ang=i*Math.PI/3;flake.moveTo(0,0);flake.lineTo(Math.cos(ang)*12,Math.sin(ang)*12);
-      }
-      flake.name='flake';proj.addChild(flake); break;
+      break;
     }
     case 'bloodblade': {
-      const d=new PIXI.Graphics();
-      d.beginFill(0xcc1122,1);
-      d.moveTo(0,-r*2.2);d.lineTo(r*0.35,-r*0.5);d.lineTo(r*0.25,r);d.lineTo(0,r*1.3);d.lineTo(-r*0.25,r);d.lineTo(-r*0.35,-r*0.5);d.closePath();d.endFill();
-      d.lineStyle(0);d.beginFill(0x880011,1);d.drawRoundedRect(-r*0.6,-r*0.5,r*1.2,r*0.35,2);d.endFill();
-      d.beginFill(0x4a1010,1);d.drawRoundedRect(-r*0.2,-r*0.1,r*0.4,r*1.1,2);d.endFill();
-      d.beginFill(0xff0033,0.2);d.drawEllipse(0,-r,r*0.8,r*2);d.endFill();
-      proj.addChild(d); break;
+      for (let i = 0; i < 20; i++) {
+        const d = new PIXI.Graphics();
+        const pr = i % 4 === 0 ? 4 : 2.5;
+        d.beginFill(i % 3 === 0 ? 0xff0033 : 0xcc1122, 1); d.drawCircle(0, 0, pr); d.endFill();
+        const spawnAng = Math.random() * Math.PI * 2, spawnR = Math.random() * r * 0.8;
+        d.x = Math.cos(spawnAng) * spawnR; d.y = Math.sin(spawnAng) * spawnR;
+        const velAng = Math.random() * Math.PI * 2, speed = 2 + Math.random() * 3;
+        d._vx = Math.cos(velAng) * speed; d._vy = Math.sin(velAng) * speed;
+        d.name = `bdot${i}`; proj.addChild(d);
+      }
+      break;
+    }
+    case 'afterimage': {
+      const st = CLASS_STYLES.blood;
+      const sword = new PIXI.Sprite(texCache.sword);
+      sword.anchor.set(0.5); sword.x = 30; sword.y = -30;
+      sword.scale.set(0.09, 0.11); sword.rotation = -Math.PI / 2;
+      sword.tint = st.bodyHi; proj.addChild(sword);
+      const arm1 = new PIXI.Graphics();
+      arm1.beginFill(st.arm, 1); arm1.drawCircle(18, -12, 7); arm1.endFill();
+      proj.addChild(arm1);
+      const arm2 = new PIXI.Graphics();
+      arm2.beginFill(st.arm, 1); arm2.drawCircle(18, 12, 7); arm2.endFill();
+      proj.addChild(arm2);
+      const body = new PIXI.Graphics();
+      body.lineStyle(3.5, st.outline, 0.9);
+      body.beginFill(st.body, 1); body.drawCircle(0, 0, 20); body.endFill();
+      proj.addChild(body);
+      proj._born = Date.now();
+      break;
     }
     case 'shockwave': {
       const crackPaths = [];
@@ -1082,16 +1137,11 @@ case 'voidorb': {
       const core=new PIXI.Graphics();core.name='core';proj.addChild(core); break;
     }
     case 'lightningbolt': {
-      const bolt=new PIXI.Graphics();
-      bolt.beginFill(0xffffff,0.9);
-      bolt.moveTo(0,-r*0.5);bolt.lineTo(r*6,-r*0.3);bolt.lineTo(r*5,0);bolt.lineTo(r*10,r*0.3);
-      bolt.lineTo(r*9.5,-r*0.1);bolt.lineTo(r*14,0);bolt.lineTo(r*13.5,r*0.5);
-      bolt.lineTo(r*8,r*0.3);bolt.lineTo(r*8.5,-r*0.1);bolt.lineTo(r*4.5,r*0.3);
-      bolt.lineTo(r*5.5,-r*0.3);bolt.lineTo(0,r*0.5);bolt.closePath();bolt.endFill();
-      bolt.beginFill(0xffee88,0.3);bolt.drawRoundedRect(-r*0.5,-r*0.7,r*15,r*1.4,r*0.7);bolt.endFill();
-      bolt.beginFill(0xffffff,0.7);bolt.drawRoundedRect(0,-r*0.15,r*14,r*0.3,r*0.15);bolt.endFill();
-      bolt.x = -r*14;
-      proj.addChild(bolt); break;
+      const glow=new PIXI.Graphics();glow.name='glow';proj.addChild(glow);
+      for(let i=0;i<3;i++){const a=new PIXI.Graphics();a.name=`arc${i}`;proj.addChild(a);}
+      const core=new PIXI.Graphics();core.name='core';proj.addChild(core);
+      const bright=new PIXI.Graphics();bright.name='bright';proj.addChild(bright);
+      break;
     }
     case 'lightningspark': {
       const sp=new PIXI.Graphics();
@@ -1120,16 +1170,29 @@ function updateProjSprite(id, p, now) {
     case 'fireball':
     case 'chonkyfireball':
     case 'clusterfireball': {
-      c.rotation = p.dir;
       const base = r;
+      const dir = p.dir || 0;
+
       for (let i = 0; i < 5; i++) {
         const w = c.getChildByName(`wisp${i}`);
         if (!w) continue;
         w.clear();
-        const ang = now / 80 + i * Math.PI * 2 / 5;
-        const wr  = base * (0.5 + 0.5 * Math.sin(now / 60 + i));
-        w.beginFill(0xff8800, 0.55);
-        w.drawEllipse(Math.cos(ang) * base * 0.7, Math.sin(ang) * base * 0.4, wr * 0.5, wr * 0.8);
+
+        // pct 0 = tail, 1 = just behind core; spacing scales with radius
+        const pct = i / 4;
+        const trailDist = (1 - pct) * base * 3.5;
+        const tx = -Math.cos(dir) * trailDist;
+        const ty = -Math.sin(dir) * trailDist;
+
+        const wobble = Math.sin(now / 55 + i * 1.2) * base * 0.45;
+        const perpX = -Math.sin(dir) * wobble;
+        const perpY =  Math.cos(dir) * wobble;
+
+        const alpha = 0.28 + pct * 0.48;
+        const wr = base * (0.3 + pct * 0.6);
+        const colors = [0x881100, 0xcc2200, 0xff4400, 0xff8800, 0xffcc44];
+        w.beginFill(colors[i], alpha);
+        w.drawCircle(tx + perpX, ty + perpY, wr);
         w.endFill();
       }
       break;
@@ -1191,19 +1254,22 @@ case 'crusadepull': {
 
   const chargeTrail = c.getChildByName('chargeTrail');
   if (chargeTrail && c._trailHistory != null) {
-    const jitter = 18;
+    const jitter = 24;
     c._trailHistory.push({
       x: p.renderX + (Math.random() - 0.5) * jitter,
       y: p.renderY + (Math.random() - 0.5) * jitter,
-      r: 2 + Math.random() * 6,
+      r: 8 + Math.random() * 14,
     });
-    if (c._trailHistory.length > 22) c._trailHistory.shift();
+    if (c._trailHistory.length > 40) c._trailHistory.shift();
     chargeTrail.clear();
     for (let i = 0; i < c._trailHistory.length; i++) {
       const pt = c._trailHistory[i];
       const pct = i / c._trailHistory.length;
-      chargeTrail.beginFill(0xffd700, pct * 0.75);
+      chargeTrail.beginFill(0xffd700, pct * 0.85);
       chargeTrail.drawCircle(pt.x - p.renderX, pt.y - p.renderY, pt.r * pct);
+      chargeTrail.endFill();
+      chargeTrail.beginFill(0xffffff, pct * 0.6);
+      chargeTrail.drawCircle(pt.x - p.renderX, pt.y - p.renderY, pt.r * pct * 0.45);
       chargeTrail.endFill();
     }
   }
@@ -1253,23 +1319,39 @@ case 'voidpull': {
       c.rotation = p.dir + Math.PI / 2;
       break;
     case 'iceblade':
-      p._spin = (p._spin || 0) + 0.06;
+      p._spin = (p._spin || 0) + 0.15;
       c.rotation = p._spin;
       break;
-    case 'bloodblade':
-      p._spin = (p._spin || 0) + 0.1;
-      c.rotation = p._spin;
+    case 'bloodblade': {
+      for (let i = 0; i < 20; i++) {
+        const d = c.getChildByName(`bdot${i}`);
+        if (!d) continue;
+        d.x += d._vx; d.y += d._vy;
+        if (Math.hypot(d.x, d.y) > r * 0.9) { d.x = -d.x * 0.9; d.y = -d.y * 0.9; }
+        if (trailLayer && Math.random() < 0.4) {
+          const dot = new PIXI.Graphics();
+          dot.beginFill(0x990011, 0.6); dot.drawCircle(0, 0, 3 + Math.random() * 3); dot.endFill();
+          dot.x = p.renderX + d.x; dot.y = p.renderY + d.y;
+          trailLayer.addChild(dot);
+          frenzyTrails.push({ g: dot, born: now });
+        }
+      }
       break;
+    }
+    case 'afterimage': {
+      const age = now - (c._born || now);
+      c.alpha = Math.max(0, 1 - age / 500);
+      c.rotation = p.dir;
+      break;
+    }
     case 'snowstorm': {
-      const flake = c.getChildByName('flake');
-      if (flake) flake.rotation = now / 800;
-      for (let i = 0; i < 18; i++) {
+      for (let i = 0; i < 50; i++) {
         const d = c.getChildByName(`dot${i}`);
         if (!d) continue;
-        const ang = now / 300 + i * (Math.PI * 2 / 18);
-        const dr  = r * (0.5 + 0.45 * ((i % 3) / 2));
-        d.x = Math.cos(ang) * dr;
-        d.y = Math.sin(ang) * dr;
+        d.x += d._vx; d.y += d._vy;
+        if (Math.hypot(d.x, d.y) > r) {
+          d.x = -d.x; d.y = -d.y;
+        }
       }
       break;
     }
@@ -1321,9 +1403,70 @@ case 'voidpull': {
       }
       break;
     }
-    case 'lightningbolt':
+    case 'lightningbolt': {
       c.rotation = p.dir;
+      const len = r * 19, SEGS = 24;
+      const pulse = 0.9 + 0.1 * Math.sin(now / 120);
+
+      // Outer glow — two layered tapered auras; tip at x=0, tail at x=-len
+      const glow = c.getChildByName('glow');
+      if (glow) {
+        glow.clear();
+        for (const [col, alpha, wMul] of [[0xffee22, 0.13, 1.4], [0xffff88, 0.20, 0.7]]) {
+          const mw = r * wMul * pulse;
+          glow.beginFill(col, alpha);
+          glow.moveTo(-len, 0);
+          for (let i = 0; i <= SEGS; i++) { const t=i/SEGS; glow.lineTo((t-1)*len, -mw*Math.sin(t*Math.PI)); }
+          for (let i = SEGS; i >= 0; i--) { const t=i/SEGS; glow.lineTo((t-1)*len,  mw*Math.sin(t*Math.PI)); }
+          glow.closePath(); glow.endFill();
+        }
+      }
+
+      // Electric arcs — zigzag lines that animate and taper with the bolt
+      for (let ai = 0; ai < 3; ai++) {
+        const arc = c.getChildByName(`arc${ai}`);
+        if (!arc) continue;
+        arc.clear();
+        const spread = r * (1.4 - ai * 0.25);
+        const spd    = 1 + ai * 0.55;
+        arc.lineStyle(3.0 - ai * 0.6, ai === 0 ? 0xffffff : 0xffee88, 1.0 - ai * 0.1);
+        arc.moveTo(-len, 0);
+        const ARC_SEGS = 16;
+        for (let j = 1; j <= ARC_SEGS; j++) {
+          const t   = j / ARC_SEGS;
+          const x   = (t - 1) * len;
+          const env = Math.sin(t * Math.PI);
+          const side = (j % 2) * 2 - 1;
+          const amp  = 0.3 + 0.2 * Math.abs(Math.sin(now / 50 * spd + ai * 2.3 + j * 1.7));
+          arc.lineTo(x, side * spread * env * amp);
+        }
+      }
+
+      // Core — tapered yellow-white filled shape
+      const core = c.getChildByName('core');
+      if (core) {
+        core.clear();
+        const mw = r * 0.38;
+        core.beginFill(0xffee44, 0.88);
+        core.moveTo(-len, 0);
+        for (let i = 0; i <= SEGS; i++) { const t=i/SEGS; core.lineTo((t-1)*len, -mw*Math.sin(t*Math.PI)); }
+        for (let i = SEGS; i >= 0; i--) { const t=i/SEGS; core.lineTo((t-1)*len,  mw*Math.sin(t*Math.PI)); }
+        core.closePath(); core.endFill();
+      }
+
+      // Bright spine — pure white ultra-thin tapering center
+      const bright = c.getChildByName('bright');
+      if (bright) {
+        bright.clear();
+        const mw = r * 0.12;
+        bright.beginFill(0xffffff, 1.0);
+        bright.moveTo(-len, 0);
+        for (let i = 0; i <= SEGS; i++) { const t=i/SEGS; bright.lineTo((t-1)*len, -mw*Math.sin(t*Math.PI)); }
+        for (let i = SEGS; i >= 0; i--) { const t=i/SEGS; bright.lineTo((t-1)*len,  mw*Math.sin(t*Math.PI)); }
+        bright.closePath(); bright.endFill();
+      }
       break;
+    }
     case 'lightningspark':
       c.rotation = now / 100;
       break;
@@ -1405,7 +1548,7 @@ function initUI() {
   const skillOutlines = [];
 
   const miniMap = new PIXI.Graphics();
-  miniMap.beginFill(0x2a5a2a, 0.5);
+  miniMap.beginFill(0x324e2a, 0.5);
   miniMap.drawRect(mmX + 1, mmY + 1, mmSize - 2, mmSize - 2);
   miniMap.endFill();
   uiContainer.addChild(miniMap);
