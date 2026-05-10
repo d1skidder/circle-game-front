@@ -95,7 +95,7 @@ function initJoinScreen() {
     document.getElementById('deathScreen').style.display = 'none';
     document.getElementById('joinScreen').style.display = 'flex';
     document.getElementById('gameScreen').style.display = 'none';
-    if (ws) { ws.close(); ws = null; }
+    ws = null;
     myId = null; dead = false; killcount = 0;
     players = {}; projectiles = {}; obstacles = {};
     clearScene();
@@ -172,8 +172,10 @@ function clearScene() {
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
 
   for (const d of damageTexts) {
-    if (d.obj && d.obj.parent) d.obj.parent.removeChild(d.obj);
-    d.obj.destroy();
+    if (d.obj && !d.obj.destroyed) {
+      if (d.obj.parent) d.obj.parent.removeChild(d.obj);
+      d.obj.destroy();
+    }
   }
   damageTexts = [];
 
