@@ -507,8 +507,14 @@ function updateFrenzyTrails(now) {
 // ═══════════════════════════════════════════════════
 //  GAME LOOP
 // ═══════════════════════════════════════════════════
+const FPS_CAP = 120;
+const FRAME_MIN_MS = 1000 / FPS_CAP;
+let lastFrameTime = 0;
+
 function gameLoop() {
   const now = Date.now();
+  if (now - lastFrameTime < FRAME_MIN_MS) return;
+  lastFrameTime = now;
   if (!myId) return;
   if (now - 100000 > gameStartTime && !players[myId] && !dead) { triggerDeath(); return; }
 
