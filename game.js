@@ -28,7 +28,7 @@ const pressed = {};
 let lastMoveSend = 0;
 // ── PIXI OBJECTS ─────────────────────────────────
 let app, mapContainer, uiContainer;
-let obstacleLayer, projLayer, playerLayer, trailLayer;
+let obstacleLayer, projLayer, aboveObstacleLayer, playerLayer, trailLayer;
 let frenzyTrails = [];
 let lightningParticles = [];
 let mapBg = null;
@@ -151,10 +151,11 @@ function initPixi() {
 
   obstacleLayer = new PIXI.Container();
   projLayer = new PIXI.Container();
+  aboveObstacleLayer = new PIXI.Container();
   trailLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(capturePointGraphic, projLayer, obstacleLayer, trailLayer, playerLayer);
+  mapContainer.addChild(capturePointGraphic, projLayer, trailLayer,obstacleLayer, aboveObstacleLayer, playerLayer);
 
   generateTextures();
   initUI();
@@ -169,10 +170,11 @@ function clearScene() {
   }
   obstacleLayer = new PIXI.Container();
   projLayer = new PIXI.Container();
+  aboveObstacleLayer = new PIXI.Container();
   trailLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(projLayer, obstacleLayer, trailLayer, playerLayer, capturePointGraphic);
+  mapContainer.addChild(projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, playerLayer, capturePointGraphic);
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
   frenzyTrails = [];
   lightningParticles = [];
@@ -198,13 +200,14 @@ function clearScene() {
 // ═══════════════════════════════════════════════════
 function generateTextures() {
   texCache.sword         = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/swordSprite.png');
-  texCache.enhancedSword = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/enhancedsword_placeholder.png');
+  texCache.enhancedSword = PIXI.Texture.from('assets/stone_club.webp');
   texCache.voidOuter  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidOuterRingClean.png');
   texCache.voidMiddle = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidMiddleRingClean.png');
   texCache.voidInner  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidInnerRingClean.png');
   texCache.voidHand = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidHandClean.png');
   texCache.crusadeWing = PIXI.Texture.from('assets/CrusadeWingClean.png');
-  texCache.holySword = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/HolySwordClean.png');
+  texCache.holySword = PIXI.Texture.from('assets/holy_sword.webp');
+  texCache.earthWave = PIXI.Texture.from('assets/earth_wave.webp');
   texCache.iceSword      = PIXI.Texture.from('assets/iceblade.png');
   texCache.rock          = makeRockTexture();
 }
@@ -492,14 +495,30 @@ function updateFrenzyTrails(now) {
   for (let i = frenzyTrails.length - 1; i >= 0; i--) {
     const t = frenzyTrails[i];
     const age = now - t.born;
-    if (age >= DURATION) {
+    const ttl = t.ttl || DURATION;
+    if (age >= ttl) {
       trailLayer.removeChild(t.g);
       t.g.destroy();
       frenzyTrails.splice(i, 1);
     } else {
-      const p = 1 - age / DURATION;
-      t.g.alpha = p * 0.7;
-      t.g.scale.set(0.3 + p * 0.7);
+      const p = 1 - age / ttl;
+      if (t.isHsParticle) {
+        // velocity-driven burst particle
+        t.g.x += t.g._vx * (1 / 60);
+        t.g.y += t.g._vy * (1 / 60);
+        t.g._vx *= 0.88; t.g._vy *= 0.88;
+        t.g.alpha = p < 0.25 ? p / 0.25 : 1; // stay solid, sharp drop at end
+      } else if (t.fadeOnly) {
+        t.g.alpha = p;
+      } else if (t.scaleEnd) {
+        // expanding ring
+        const s = 1 + (1 - p) * (t.scaleEnd - 1);
+        t.g.scale.set(s);
+        t.g.alpha = p * 0.9;
+      } else {
+        t.g.alpha = p * 0.7;
+        t.g.scale.set(0.3 + p * 0.7);
+      }
     }
   }
 }
@@ -839,7 +858,7 @@ function updatePlayerSprite(id, p, now) {
     const numRings = Math.min(p.earthShields ?? 0, 3);
     const ROCKS_PER_RING = [5, 10, 15];
     const RING_RADII     = [28, 42, 56];
-    const ROCK_PX        = 9; // sprite diameter in px (rock radius ~4.5 world units)
+    const ROCK_PX        = 12; // sprite diameter in px (rock radius ~4.5 world units)
     const ROCK_SCALE     = ROCK_PX / 100; // texCache.rock is 100×100
 
     // Rebuild sprites only when the ring count changes
@@ -850,6 +869,7 @@ function updatePlayerSprite(id, p, now) {
           const s = new PIXI.Sprite(texCache.rock);
           s.anchor.set(0.5);
           s.scale.set(ROCK_SCALE);
+          s.tint = 0x888070;
           s._ring = ring;
           s._idx  = i;
           earthShieldCt.addChild(s);
@@ -897,8 +917,8 @@ function updatePlayerSprite(id, p, now) {
       if (pWingGlow) {
         pWingGlow.clear();
         const pulse = 0.08 + 0.04 * Math.sin(now / 200);
-        pWingGlow.beginFill(0xffd700, pulse * 0.5); pWingGlow.drawCircle(0, 0, spread * 1.1); pWingGlow.endFill();
-        pWingGlow.beginFill(0xffe566, pulse); pWingGlow.drawCircle(0, 0, spread * 0.55); pWingGlow.endFill();
+        pWingGlow.beginFill(0xffd700, pulse * 1.5); pWingGlow.drawCircle(0, 0, Math.min(spread * 1.1, 55)); pWingGlow.endFill();
+        pWingGlow.beginFill(0xffe566, pulse); pWingGlow.drawCircle(0, 0, Math.min(spread * 0.55, 55)); pWingGlow.endFill();
       }
     }
   }
@@ -908,9 +928,20 @@ function updatePlayerSprite(id, p, now) {
   const swordOutline = c.getChildByName('swordOutline');
   if (sword) {
     const newTex = p.basicEnhanced ? texCache.enhancedSword : texCache.sword;
+    const newRot = p.basicEnhanced ? 0 : -Math.PI / 2;
     sword.texture = newTex;
+    sword.rotation = newRot;
+    if (p.basicEnhanced) {
+      sword.x = 20; sword.y = -40;
+    } else {
+      sword.x = 30; sword.y = -30;
+    }
     if (swordOutline) {
-      for (const child of swordOutline.children) child.texture = newTex;
+      swordOutline.x = sword.x; swordOutline.y = sword.y;
+      for (const child of swordOutline.children) {
+        child.texture = newTex;
+        child.rotation = newRot;
+      }
     }
   }
 
@@ -937,7 +968,7 @@ function getOrCreateProj(id, type, radius) {
     c.x = p.renderX;
     c.y = p.renderY;
   }
-  projLayer.addChild(c);
+  (type === 'earthwave' ? aboveObstacleLayer : projLayer).addChild(c);
   projContainers[id] = c;
   return c;
 }
@@ -1042,7 +1073,7 @@ function buildProjContainer(type, radius) {
       ring.name = 'cpRing';
       proj.addChild(ring);
 
-      for (let i = 0; i < 18; i++) {
+      for (let i = 0; i < 40; i++) {
         const dot = new PIXI.Graphics();
         const isYellow = i % 3 === 0;
         dot.beginFill(isYellow ? 0xffd700 : 0xffffff, 0.9);
@@ -1052,8 +1083,8 @@ function buildProjContainer(type, radius) {
         proj.addChild(dot);
       }
 
-      proj._cpParticles = Array.from({ length: 18 }, (_, i) => {
-        const angle = (i / 18) * Math.PI * 2 + Math.random() * 0.3;
+      proj._cpParticles = Array.from({ length: 40 }, (_, i) => {
+        const angle = (i / 40) * Math.PI * 2 + Math.random() * 0.3;
         return {
           angle,
           dist: 0.85 + Math.random() * 0.15,
@@ -1193,6 +1224,59 @@ function buildProjContainer(type, radius) {
       sp.beginFill(0xffee88,0.25);sp.drawCircle(0,0,r*0.9);sp.endFill();
       sp.beginFill(0xffffff,0.95);sp.drawCircle(0,0,r*0.35);sp.endFill();
       proj.addChild(sp); break;
+    }
+    case 'holysmite': {
+      const ringRadius = r;
+      const glow = new PIXI.Graphics();
+      glow.beginFill(0xffd700, 0.12);
+      glow.drawCircle(0, 0, ringRadius);
+      glow.endFill();
+      glow.lineStyle(1.5, 0xffd700, 0.28);
+      glow.drawCircle(0, 0, ringRadius);
+      glow.name = 'hsGlow';
+      proj.addChild(glow);
+      for (let i = 0; i < 12; i++) {
+        const sw = new PIXI.Sprite(texCache.holySword);
+        sw.anchor.set(0.5);
+        sw.width = r*0.8;
+        sw.height = r*0.6;
+        sw._bsx = sw.scale.x;
+        sw._bsy = sw.scale.y;
+        sw.x = ringRadius/2;
+        sw.y = 0;
+        sw.rotation = Math.PI / 2;
+        sw.name = `hsword${i}`;
+        proj.addChild(sw);
+      }
+      proj._born = Date.now();
+      break;
+    }
+    case 'earthwave': {
+      const ewW = r * 5, ewH = r * 3.5, ewThick = 1;
+      const shadow = new PIXI.Sprite(texCache.earthWave); shadow.name = 'ewShadow';
+      shadow.anchor.set(0.5);
+      shadow.width = ewW * 1.05; shadow.height = ewH * 1.05;
+      shadow.tint = 0x000000; shadow.alpha = 0.35;
+      shadow.x = 5; shadow.y = 15;
+      proj.addChild(shadow);
+      const outline = new PIXI.Container(); outline.name = 'ewOutline';
+      for (const [ox, oy] of [[-ewThick,0],[ewThick,0],[0,-ewThick],[0,ewThick],[-ewThick,-ewThick],[ewThick,-ewThick],[-ewThick,ewThick],[ewThick,ewThick]]) {
+        const sh = new PIXI.Sprite(texCache.earthWave);
+        sh.anchor.set(0.5); sh.width = ewW; sh.height = ewH;
+        sh.tint = 0x000000; sh.x = ox; sh.y = oy;
+        outline.addChild(sh);
+      }
+      proj.addChild(outline);
+      const spr = new PIXI.Sprite(texCache.earthWave);
+      spr.anchor.set(0.5);
+      spr.width = ewW;
+      spr.height = ewH;
+      spr.name = 'ewSprite';
+      proj.addChild(spr);
+      const trail = new PIXI.Graphics();
+      trail.name = 'ewTrail';
+      proj.addChild(trail);
+      break;
     }
     default: {
       const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
@@ -1531,6 +1615,96 @@ case 'voidpull': {
     case 'lightningspark':
       c.rotation = now / 100;
       break;
+    case 'holysmite': {
+      const ringRadius = r * 0.3;
+      const elapsed = now - c._born;
+      const t = Math.min(elapsed / 1000, 1);
+      const et = 1 - Math.pow(1 - t, 3); // ease-out cubic
+
+      // Phase 2: jut outward after 1 second
+      const jutElapsed = Math.max(0, elapsed - 1000);
+      const jutT = Math.min(jutElapsed / 120, 1); // 80ms jut duration
+      const jutDist = jutT * r * 0.4;
+
+      // Fire explosion burst on the first frame t hits 1
+      if (elapsed >= 1000 && !c._exploded) {
+        c._exploded = true;
+        const cx = c.x, cy = c.y;
+        // Golden shockwave ring
+        const ring = new PIXI.Graphics();
+        ring.lineStyle(3, 0xffd700, 0.9);
+        ring.drawCircle(0, 0, ringRadius);
+        ring.x = cx; ring.y = cy;
+        trailLayer.addChild(ring);
+        frenzyTrails.push({ g: ring, born: now, ttl: 350, scaleEnd: 3.5, fadeOnly: false });
+        // Burst particles
+        for (let i = 0; i < 20; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = r * (1.5 + Math.random() * 2.5);
+          const dot = new PIXI.Graphics();
+          const col = [0xffd700, 0xfff8a0, 0xffffff, 0xffe066][Math.floor(Math.random() * 4)];
+          dot.beginFill(col, 1.0); dot.drawCircle(0, 0, 2 + Math.random() * 2.5); dot.endFill();
+          dot.x = cx + Math.cos(angle) * ringRadius * 0.5;
+          dot.y = cy + Math.sin(angle) * ringRadius * 0.5;
+          dot._vx = Math.cos(angle) * speed; dot._vy = Math.sin(angle) * speed;
+          trailLayer.addChild(dot);
+          frenzyTrails.push({ g: dot, born: now, ttl: 400 + Math.random() * 200, isHsParticle: true });
+        }
+        // Central flash
+        const flash = new PIXI.Graphics();
+        flash.beginFill(0xffffff, 0.9); flash.drawCircle(0, 0, r * 0.8); flash.endFill();
+        flash.x = cx; flash.y = cy;
+        trailLayer.addChild(flash);
+        frenzyTrails.push({ g: flash, born: now, ttl: 150, fadeOnly: true });
+      }
+
+      for (let i = 0; i < 12; i++) {
+        const sw = c.getChildByName(`hsword${i}`);
+        if (!sw) continue;
+        const targetAngle = (i / 12) * Math.PI * 2;
+        const angle = t < 1 ? et * targetAngle : targetAngle;
+        const rad = t < 1 ? ringRadius : ringRadius + jutDist;
+        const swordScale = t < 1 ? 1 : 1 + jutT*0.5;
+        sw.x = Math.cos(angle) * rad;
+        sw.y = Math.sin(angle) * rad;
+        sw.rotation = angle + Math.PI / 2;
+        sw.scale.set(sw._bsx * swordScale, sw._bsy * swordScale);
+      }
+      break;
+    }
+    case 'earthwave': {
+      const dir = p.dir || 0;
+      const spr = c.getChildByName('ewSprite');
+      if (spr) spr.rotation = dir;
+      const outline = c.getChildByName('ewOutline');
+      if (outline) outline.rotation = dir;
+      const shadow = c.getChildByName('ewShadow');
+      if (shadow) shadow.rotation = dir;
+
+      // shed rock chunks into the trail layer
+      if (trailLayer) {
+        const ROCK_COLORS = [0x7a6a50, 0x6b5c45, 0x8a7a66, 0x9a8a78, 0x55473a, 0xb0a090];
+        const count = 4 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < count; i++) {
+          const spread = r * 1.4;
+          const bx = p.renderX - Math.cos(dir) * r * 0.5 + (Math.random() - 0.5) * spread;
+          const by = p.renderY - Math.sin(dir) * r * 0.5 + (Math.random() - 0.5) * spread;
+          const dot = new PIXI.Graphics();
+          const col = ROCK_COLORS[Math.floor(Math.random() * ROCK_COLORS.length)];
+          const pr = 5 + Math.random() * 9;
+          dot.beginFill(col, 1);
+          dot.drawCircle(0, 0, pr);
+          dot.endFill();
+          dot.lineStyle(1, 0x2a2018, 0.5);
+          dot.drawCircle(0, 0, pr);
+          dot.x = bx;
+          dot.y = by;
+          trailLayer.addChild(dot);
+          frenzyTrails.push({ g: dot, born: now, ttl: 400 + Math.random() * 300, fadeOnly: true });
+        }
+      }
+      break;
+    }
   }
 }
 
