@@ -214,8 +214,8 @@ function generateTextures() {
   texCache.iceSword      = PIXI.Texture.from('assets/iceblade.png');
   texCache.rock          = makeRockTexture();
   texCache.bush          = PIXI.Texture.from('assets/bush.webp');
-  texCache.shockwaveFrames = Array.from({length: 9}, (_, i) =>
-    PIXI.Texture.from(`assets/shockwave/Shock${i + 1}.PNG`)
+  texCache.shockwaveFrames = Array.from({length: 8}, (_, i) =>
+    PIXI.Texture.from(`assets/shockwave/Quake${i + 1}.PNG`)
   );
 }
 
@@ -1277,7 +1277,7 @@ function buildProjContainer(type, radius) {
       const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
   }
-  //const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.7);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
+  //const def=new PIXI.Graphics();def.name='defHitbox';def.beginFill(0x8888ff,0.7);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
   return proj;
 }
 
@@ -1288,6 +1288,9 @@ function updateProjSprite(id, p, now) {
   c.y = p.renderY;
 }
   const r = Math.max(5, p.radius || 10);
+
+  const def = c.getChildByName('defHitbox');
+  if (def) { def.clear(); def.beginFill(0x8888ff, 0.7); def.drawCircle(0, 0, r); def.endFill(); }
 
   switch (p.type) {
     case 'fireball':
@@ -1498,10 +1501,14 @@ case 'voidpull': {
     case 'shockwave': {
       if (c._shockAnim) {
         const frameCount = texCache.shockwaveFrames.length;
-        const frame = Math.min(Math.floor(Math.max(0, (now - c._shockBorn)/50-2)), frameCount - 1);
+        const raw = (now - c._shockBorn) / 40 - 6;
+        const frame = Math.min(Math.floor(Math.max(0, raw)), frameCount - 1);
         c._shockAnim.gotoAndStop(frame);
-        c._shockAnim.width  = r * 2;
-        c._shockAnim.height = r * 2;
+        c._shockAnim.width  = r * 2.9;
+        c._shockAnim.height = r * 3.3;
+        const FADE_MS = 500;
+        const fadeStart = raw - (frameCount - 1);
+        c._shockAnim.alpha = fadeStart > 0 ? Math.max(0, 1 - fadeStart * 40 / FADE_MS) : 1;
       }
       break;
     }
