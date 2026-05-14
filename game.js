@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "https://circle-game-5y2k.onrender.com";
+const WS_URL = "ws://localhost:8080";
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -28,7 +28,7 @@ const pressed = {};
 let lastMoveSend = 0;
 // ── PIXI OBJECTS ─────────────────────────────────
 let app, mapContainer, uiContainer;
-let obstacleLayer, projLayer, aboveObstacleLayer, playerLayer, trailLayer;
+let obstacleLayer, projLayer, aboveObstacleLayer, playerLayer, trailLayer, bushLayer, highPlayerLayer;
 let frenzyTrails = [];
 let lightningParticles = [];
 let mapBg = null;
@@ -154,8 +154,10 @@ function initPixi() {
   aboveObstacleLayer = new PIXI.Container();
   trailLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
+  bushLayer = new PIXI.Container();
+  highPlayerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(capturePointGraphic, projLayer, trailLayer,obstacleLayer, aboveObstacleLayer, playerLayer);
+  mapContainer.addChild(capturePointGraphic, projLayer, trailLayer, obstacleLayer, playerLayer, bushLayer, aboveObstacleLayer,highPlayerLayer);
 
   generateTextures();
   initUI();
@@ -173,8 +175,10 @@ function clearScene() {
   aboveObstacleLayer = new PIXI.Container();
   trailLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
+  bushLayer = new PIXI.Container();
+  highPlayerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, playerLayer, capturePointGraphic);
+  mapContainer.addChild(projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, playerLayer, bushLayer, highPlayerLayer, capturePointGraphic);
   playerContainers = {}; projContainers = {}; obstacleSprites = {};
   frenzyTrails = [];
   lightningParticles = [];
@@ -204,12 +208,12 @@ function generateTextures() {
   texCache.voidOuter  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidOuterRingClean.png');
   texCache.voidMiddle = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidMiddleRingClean.png');
   texCache.voidInner  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidInnerRingClean.png');
-  texCache.voidHand = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidHandClean.png');
   texCache.crusadeWing = PIXI.Texture.from('assets/CrusadeWingClean.png');
   texCache.holySword = PIXI.Texture.from('assets/holy_sword.webp');
   texCache.earthWave = PIXI.Texture.from('assets/earth_wave.webp');
   texCache.iceSword      = PIXI.Texture.from('assets/iceblade.png');
   texCache.rock          = makeRockTexture();
+  texCache.bush          = PIXI.Texture.from('assets/bush.webp');
 }
 
 function bakeGraphic(g, w, h, cx, cy) {
@@ -532,7 +536,7 @@ let lastFrameTime = 0;
 
 function gameLoop() {
   const now = Date.now();
-  if (now - lastFrameTime < FRAME_MIN_MS) return;
+  if (now - lastFrameTime < FRAME_MIN_MS) {return;}
   lastFrameTime = now;
   if (!myId) return;
   if (now - 100000 > gameStartTime && !players[myId] && !dead) { triggerDeath(); return; }
@@ -708,10 +712,16 @@ function updatePlayerSprite(id, p, now) {
   if (!playerContainers[id]) {
     const c = new PIXI.Container();
     buildPlayerContainer(c, p.gameClass);
-    playerLayer.addChild(c);
+    (p.isHigh ? highPlayerLayer : playerLayer).addChild(c);
     playerContainers[id] = c;
   }
   const c = playerContainers[id];
+
+  const targetLayer = p.isHigh ? highPlayerLayer : playerLayer;
+  if (c.parent !== targetLayer) {
+    c.parent.removeChild(c);
+    targetLayer.addChild(c);
+  }
 
   c.x = p.renderX;
   c.y = p.renderY;
@@ -1719,13 +1729,26 @@ function removeProjSprite(id) {
 // ═══════════════════════════════════════════════════
 //  OBSTACLE SPRITES
 // ═══════════════════════════════════════════════════
+
 function getOrCreateObstacle(id, ob) {
   if (obstacleSprites[id]) return;
-  const s = new PIXI.Sprite(texCache.rock);
-  s.anchor.set(0.5); s.width=ob.radius*(100/42); s.height=ob.radius*(100/42);
-  s.x=ob.x; s.y=ob.y;
-  obstacleLayer.addChild(s);
-  obstacleSprites[id]=s;
+  let display;
+  if (ob.type === 'bush') {
+    const c = new PIXI.Container();
+    const s = new PIXI.Sprite(texCache.bush);
+    s.anchor.set(0.5);
+    const r = ob.radius;
+    s.width = r*6; s.height = r*4;
+    c.addChild(s);
+    display = c;
+  } else {
+    const s = new PIXI.Sprite(texCache.rock);
+    s.anchor.set(0.5); s.width = ob.radius * (100/42); s.height = ob.radius * (100/42);
+    display = s;
+  }
+  display.x = ob.x; display.y = ob.y;
+  (ob.type === 'bush' ? bushLayer : obstacleLayer).addChild(display);
+  obstacleSprites[id] = display;
 }
 
 // ═══════════════════════════════════════════════════
@@ -1966,6 +1989,7 @@ function drawUI(now, pl) {
     }
     const dot = uiMmDots[id];
     dot.clear();
+    if (p.isHidden && id !== myId) continue;
     const mmCx = mmX + p.renderX * mmScale;
     const mmCy = mmY + p.renderY * mmScale;
     const isEnemy = (gamemode === 1 || gamemode === 2) && players[myId] && p.team !== players[myId].team;
@@ -2021,6 +2045,13 @@ function drawUI(now, pl) {
     const sx = p.renderX * zoom + mapContainer.x;
     const sy = p.renderY * zoom + mapContainer.y;
     const { nt, hbg, hfill, mbg, mfill } = getOrCreatePlayerUI(id);
+
+    if (p.isHidden && id !== myId) {
+      nt.visible = false; hbg.visible = false; hfill.visible = false;
+      mbg.visible = false; mfill.visible = false;
+      continue;
+    }
+    nt.visible = true; hbg.visible = true; hfill.visible = true;
 
     let name = p.name || '?';
     if (name.length > 18) name = name.substring(0, 18) + '…';
