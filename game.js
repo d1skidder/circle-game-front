@@ -739,8 +739,8 @@ function updatePlayerSprite(id, p, now) {
   if (p.isHitting && (!p._swingStart || now - p._swingStart > 399)) {
     p._swingStart = now;
   }
+  const elapsed = now - p._swingStart;
   if (p._swingStart) {
-    const elapsed = now - p._swingStart;
     if (elapsed < 200) {
       p._swingAngle = (elapsed / 200) * Math.PI * 0.9;
     } else if (elapsed < 400) {
@@ -936,7 +936,7 @@ function updatePlayerSprite(id, p, now) {
   // ── SWORD + OUTLINE texture swap ──
   const sword = c.getChildByName('sword');
   const swordOutline = c.getChildByName('swordOutline');
-  if (sword) {
+  if (sword && elapsed > 300) {
     const newTex = p.basicEnhanced ? texCache.enhancedSword : texCache.sword;
     const newRot = p.basicEnhanced ? 0 : -Math.PI / 2;
     sword.texture = newTex;
