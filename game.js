@@ -936,7 +936,7 @@ function updatePlayerSprite(id, p, now) {
   // ── SWORD + OUTLINE texture swap ──
   const sword = c.getChildByName('sword');
   const swordOutline = c.getChildByName('swordOutline');
-  if (sword && elapsed > 300) {
+  if (sword && elapsed > 300 || (!p.swingStart)) {
     const newTex = p.basicEnhanced ? texCache.enhancedSword : texCache.sword;
     const newRot = p.basicEnhanced ? 0 : -Math.PI / 2;
     sword.texture = newTex;
