@@ -214,6 +214,9 @@ function generateTextures() {
   texCache.iceSword      = PIXI.Texture.from('assets/iceblade.png');
   texCache.rock          = makeRockTexture();
   texCache.bush          = PIXI.Texture.from('assets/bush.webp');
+  texCache.shockwaveFrames = Array.from({length: 9}, (_, i) =>
+    PIXI.Texture.from(`assets/shockwave/Shock${i + 1}.PNG`)
+  );
 }
 
 function bakeGraphic(g, w, h, cx, cy) {
@@ -936,7 +939,7 @@ function updatePlayerSprite(id, p, now) {
   // ── SWORD + OUTLINE texture swap ──
   const sword = c.getChildByName('sword');
   const swordOutline = c.getChildByName('swordOutline');
-  if (sword && elapsed > 300 || (!p.swingStart)) {
+  if (sword && !(p._swingStart && elapsed < 300)) {
     const newTex = p.basicEnhanced ? texCache.enhancedSword : texCache.sword;
     const newRot = p.basicEnhanced ? 0 : -Math.PI / 2;
     sword.texture = newTex;
@@ -1190,33 +1193,15 @@ function buildProjContainer(type, radius) {
       break;
     }
     case 'shockwave': {
-      const crackPaths = [];
-      for (let i = 0; i < 6; i++) {
-        const baseAng = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
-        const pts = [{x:0,y:0}];
-        let ang = baseAng, d = 0.08 + Math.random() * 0.12;
-        for (let j = 0; j < 3 + Math.floor(Math.random() * 2); j++) {
-          ang += (Math.random() - 0.5) * 0.7;
-          d = Math.min(d + 0.18 + Math.random() * 0.14, 1.0);
-          pts.push({x: Math.cos(ang) * d, y: Math.sin(ang) * d});
-        }
-        crackPaths.push(pts);
-        if (pts.length >= 2) {
-          const mid = pts[1];
-          const bPts = [mid];
-          let ba = ang + (Math.random() > 0.5 ? 0.6 : -0.6);
-          let bd = Math.hypot(mid.x, mid.y);
-          for (let j = 0; j < 2; j++) {
-            ba += (Math.random() - 0.5) * 0.5;
-            bd = Math.min(bd + 0.14 + Math.random() * 0.1, 0.92);
-            bPts.push({x: Math.cos(ba) * bd, y: Math.sin(ba) * bd});
-          }
-          crackPaths.push(bPts);
-        }
-      }
-      const body = new PIXI.Graphics(); body.name = 'body';
-      proj._crackPaths = crackPaths;
-      proj.addChild(body); break;
+      const anim = new PIXI.AnimatedSprite(texCache.shockwaveFrames);
+      anim.anchor.set(0.5);
+      anim.loop = false;
+      anim.autoUpdate = false;
+      anim.gotoAndStop(0);
+      proj.addChild(anim);
+      proj._shockAnim = anim;
+      proj._shockBorn = Date.now();
+      break;
     }
     case 'lightningball': {
       for(let i=0;i<4;i++){const arc=new PIXI.Graphics();arc.name=`arc${i}`;proj.addChild(arc);}
@@ -1511,25 +1496,13 @@ case 'voidpull': {
       break;
     }
     case 'shockwave': {
-      const body = c.getChildByName('body');
-      if (!body || !c._crackPaths) break;
-      body.clear();
-      const glow = 0.1 + 0.07 * Math.sin(now / 150);
-      body.beginFill(0x5c3d1e, 0.2);
-      body.drawCircle(0, 0, r);
-      body.endFill();
-      body.lineStyle(4, 0x6B4524, glow);
-      for (const path of c._crackPaths) {
-        body.moveTo(path[0].x * r, path[0].y * r);
-        for (let k = 1; k < path.length; k++) body.lineTo(path[k].x * r, path[k].y * r);
+      if (c._shockAnim) {
+        const frameCount = texCache.shockwaveFrames.length;
+        const frame = Math.min(Math.floor(Math.max(0, (now - c._shockBorn)/50-2)), frameCount - 1);
+        c._shockAnim.gotoAndStop(frame);
+        c._shockAnim.width  = r * 2;
+        c._shockAnim.height = r * 2;
       }
-      body.lineStyle(1.5, 0x1a0800, 0.3);
-      for (const path of c._crackPaths) {
-        body.moveTo(path[0].x * r, path[0].y * r);
-        for (let k = 1; k < path.length; k++) body.lineTo(path[k].x * r, path[k].y * r);
-      }
-      body.lineStyle(2, 0x6a4010, 0.3);
-      body.drawCircle(0, 0, r);
       break;
     }
     case 'lightningball': {
