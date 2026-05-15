@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "wss://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -214,6 +214,8 @@ function generateTextures() {
   texCache.iceSword      = PIXI.Texture.from('assets/iceblade.png');
   texCache.rock          = makeRockTexture();
   texCache.bush          = PIXI.Texture.from('assets/bush.webp');
+  texCache.rockfist      = PIXI.Texture.from('assets/rockfist.webp');
+  texCache.lavapool      = PIXI.Texture.from('assets/lavapool.webp');
   texCache.shockwaveFrames = Array.from({length: 8}, (_, i) =>
     PIXI.Texture.from(`assets/shockwave/Quake${i + 1}.PNG`)
   );
@@ -1339,6 +1341,33 @@ function buildProjContainer(type, radius) {
       proj._born = Date.now();
       break;
     }
+    case 'rockpush': {
+      const fistSize = r * 2.4;
+      const outline = new PIXI.Container(); outline.name = 'rfOutline';
+      const thick = 3;
+      for (const [ox, oy] of [[-thick,0],[thick,0],[0,-thick],[0,thick],[-thick,-thick],[thick,-thick],[-thick,thick],[thick,thick]]) {
+        const sh = new PIXI.Sprite(texCache.rockfist);
+        sh.anchor.set(0.5); sh.width = fistSize*2; sh.height = fistSize*1.5;
+        sh.tint = 0x2a1800; sh.x = ox; sh.y = oy;
+        outline.addChild(sh);
+      }
+      proj.addChild(outline);
+      const spr = new PIXI.Sprite(texCache.rockfist);
+      spr.anchor.set(0.5);
+      spr.width = fistSize*2; spr.height = fistSize*1.5;
+      spr.name = 'rfSprite';
+      proj.addChild(spr);
+      proj._born = Date.now();
+      break;
+    }
+    case 'lavarock': {
+      const spr = new PIXI.Sprite(texCache.lavapool);
+      spr.anchor.set(0.5);
+      spr.width = r * 5; spr.height = r * 5;
+      spr.name = 'lrSprite';
+      proj.addChild(spr);
+      break;
+    }
     case 'earthwave': {
       const ewW = r * 5, ewH = r * 3.5, ewThick = 1;
       const shadow = new PIXI.Sprite(texCache.earthWave); shadow.name = 'ewShadow';
@@ -1367,10 +1396,10 @@ function buildProjContainer(type, radius) {
       break;
     }
     default: {
-      const def=new PIXI.Graphics();def.beginFill(0x8888ff,0.6);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
+      const def=new PIXI.Graphics();def.name='defCircle';def.beginFill(0x8888ff,0.4);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
   }
-  //const def=new PIXI.Graphics();def.name='defHitbox';def.beginFill(0x8888ff,0.7);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
+  const def=new PIXI.Graphics();def.name='defCircle';def.beginFill(0x8888ff,0.4);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
   return proj;
 }
 
@@ -1434,123 +1463,123 @@ function updateProjSprite(id, p, now) {
       break;
     }
     case 'voidorb': {
-  if (!c._orbHistory) c._orbHistory = [];
-  c._orbHistory.push({ x: p.renderX, y: p.renderY });
-  if (c._orbHistory.length > 14) c._orbHistory.shift();
+      if (!c._orbHistory) c._orbHistory = [];
+      c._orbHistory.push({ x: p.renderX, y: p.renderY });
+      if (c._orbHistory.length > 14) c._orbHistory.shift();
 
-  const trail = c.getChildByName('voidOrbTrail');
-  if (trail && c._orbHistory.length > 1) {
-    trail.clear();
-    const len = c._orbHistory.length;
-    for (let i = 0; i < len - 1; i++) {
-      const pct = i / len;
-      const alpha = pct * 0.55;
-      const size = r * (0.3 + pct * 0.6);
-      const tx = c._orbHistory[i].x - p.renderX;
-      const ty = c._orbHistory[i].y - p.renderY;
-      trail.beginFill(0x2a0a3a, alpha);
-      trail.drawCircle(tx, ty, size);
-      trail.endFill();
-    }
-  }
-  break;
-}
-case 'crusadepull': {
-  const ring = c.getChildByName('cpRing');
-  if (ring) {
-    ring.clear();
-    ring.lineStyle(2.5, 0xffffff, 0.35);
-    ring.drawCircle(0, 0, r);
-    ring.lineStyle(1, 0xffd700, 0.15);
-    ring.drawCircle(0, 0, r - 4);
-  }
-
-  if (c._cpParticles) {
-    for (let i = 0; i < c._cpParticles.length; i++) {
-      const pd = c._cpParticles[i];
-      const dot = c.getChildByName(`cpDot${i}`);
-      if (!dot) continue;
-      pd.dist -= pd.speed;
-      if (pd.dist <= 0.04) {
-        pd.dist = 0.8 + Math.random() * 0.2;
-        pd.angle = Math.random() * Math.PI * 2;
-        pd.speed = 0.018 + Math.random() * 0.012;
+      const trail = c.getChildByName('voidOrbTrail');
+      if (trail && c._orbHistory.length > 1) {
+        trail.clear();
+        const len = c._orbHistory.length;
+        for (let i = 0; i < len - 1; i++) {
+          const pct = i / len;
+          const alpha = pct * 0.55;
+          const size = r * (0.3 + pct * 0.6);
+          const tx = c._orbHistory[i].x - p.renderX;
+          const ty = c._orbHistory[i].y - p.renderY;
+          trail.beginFill(0x2a0a3a, alpha);
+          trail.drawCircle(tx, ty, size);
+          trail.endFill();
+        }
       }
-      dot.x = Math.cos(pd.angle) * pd.dist * r;
-      dot.y = Math.sin(pd.angle) * pd.dist * r;
-      const pct = pd.dist;
-      dot.alpha = 0.3 + pct * 0.7;
-      dot.scale.set(0.4 + pct * 0.6);
+      break;
     }
-  }
-  break;
-}case 'crusadecharge': {
-  c.x = lerp(c.x, p.renderX, 0.35);
-  c.y = lerp(c.y, p.renderY, 0.35);
+    case 'crusadepull': {
+      const ring = c.getChildByName('cpRing');
+      if (ring) {
+        ring.clear();
+        ring.lineStyle(2.5, 0xffffff, 0.35);
+        ring.drawCircle(0, 0, r);
+        ring.lineStyle(1, 0xffd700, 0.15);
+        ring.drawCircle(0, 0, r - 4);
+      }
 
-  const chargeTrail = c.getChildByName('chargeTrail');
-  if (chargeTrail && c._trailHistory != null) {
-    const jitter = 18;
-    c._trailHistory.push({
-      x: p.renderX + (Math.random() - 0.5) * jitter,
-      y: p.renderY + (Math.random() - 0.5) * jitter,
-      r: 6 + Math.random() * 10,
-    });
-    if (c._trailHistory.length > 25) c._trailHistory.shift();
-    chargeTrail.clear();
-    for (let i = 0; i < c._trailHistory.length; i++) {
-      const pt = c._trailHistory[i];
-      const pct = i / c._trailHistory.length;
-      chargeTrail.beginFill(0xffd700, pct * 0.6);
-      chargeTrail.drawCircle(pt.x - p.renderX, pt.y - p.renderY, pt.r * pct);
-      chargeTrail.endFill();
-      chargeTrail.beginFill(0xffffff, pct * 0.4);
-      chargeTrail.drawCircle(pt.x - p.renderX, pt.y - p.renderY, pt.r * pct * 0.45);
-      chargeTrail.endFill();
+      if (c._cpParticles) {
+        for (let i = 0; i < c._cpParticles.length; i++) {
+          const pd = c._cpParticles[i];
+          const dot = c.getChildByName(`cpDot${i}`);
+          if (!dot) continue;
+          pd.dist -= pd.speed;
+          if (pd.dist <= 0.04) {
+            pd.dist = 0.8 + Math.random() * 0.2;
+            pd.angle = Math.random() * Math.PI * 2;
+            pd.speed = 0.018 + Math.random() * 0.012;
+          }
+          dot.x = Math.cos(pd.angle) * pd.dist * r;
+          dot.y = Math.sin(pd.angle) * pd.dist * r;
+          const pct = pd.dist;
+          dot.alpha = 0.3 + pct * 0.7;
+          dot.scale.set(0.4 + pct * 0.6);
+        }
+      }
+      break;
+    }case 'crusadecharge': {
+      c.x = lerp(c.x, p.renderX, 0.35);
+      c.y = lerp(c.y, p.renderY, 0.35);
+
+      const chargeTrail = c.getChildByName('chargeTrail');
+      if (chargeTrail && c._trailHistory != null) {
+        const jitter = 18;
+        c._trailHistory.push({
+          x: p.renderX + (Math.random() - 0.5) * jitter,
+          y: p.renderY + (Math.random() - 0.5) * jitter,
+          r: 6 + Math.random() * 10,
+        });
+        if (c._trailHistory.length > 25) c._trailHistory.shift();
+        chargeTrail.clear();
+        for (let i = 0; i < c._trailHistory.length; i++) {
+          const pt = c._trailHistory[i];
+          const pct = i / c._trailHistory.length;
+          chargeTrail.beginFill(0xffd700, pct * 0.6);
+          chargeTrail.drawCircle(pt.x - p.renderX, pt.y - p.renderY, pt.r * pct);
+          chargeTrail.endFill();
+          chargeTrail.beginFill(0xffffff, pct * 0.4);
+          chargeTrail.drawCircle(pt.x - p.renderX, pt.y - p.renderY, pt.r * pct * 0.45);
+          chargeTrail.endFill();
+        }
+      }
+      break;
     }
-  }
-  break;
-}
     case 'blackhole': {
-  const outer  = c.getChildByName('voidOuter');
-  const middle = c.getChildByName('voidMiddle');
-  const inner  = c.getChildByName('voidInner');
-  if (outer)  outer.rotation  -= 0.008;
-  if (middle) middle.rotation += 0.014;
-  if (inner)  inner.rotation  -= 0.022;
+      const outer  = c.getChildByName('voidOuter');
+      const middle = c.getChildByName('voidMiddle');
+      const inner  = c.getChildByName('voidInner');
+      if (outer)  outer.rotation  -= 0.008;
+      if (middle) middle.rotation += 0.014;
+      if (inner)  inner.rotation  -= 0.022;
 
-  if (c._bhParticles) {
-    for (let i = 0; i < c._bhParticles.length; i++) {
-      const pd = c._bhParticles[i];
-      const dot = c.getChildByName(`bhDot${i}`);
-      if (!dot) continue;
+      if (c._bhParticles) {
+        for (let i = 0; i < c._bhParticles.length; i++) {
+          const pd = c._bhParticles[i];
+          const dot = c.getChildByName(`bhDot${i}`);
+          if (!dot) continue;
 
-      pd.angle += pd.speed;
-      pd.radius -= pd.inSpeed;
+          pd.angle += pd.speed;
+          pd.radius -= pd.inSpeed;
 
-      if (pd.radius < r * 0.1) {
-  pd.radius = r * (1.1 + Math.random() * 0.2);
-  pd.angle = Math.random() * Math.PI * 2;
-  pd.speed = 0.02 + Math.random() * 0.02;
-  pd.inSpeed = 2.5 + Math.random() * 1.5;
-}
-
-      dot.x = Math.cos(pd.angle) * pd.radius;
-      dot.y = Math.sin(pd.angle) * pd.radius;
-      const pct = pd.radius / (r * 1.4);
-      dot.alpha = pct;
-      dot.scale.set(0.3 + pct * 0.7);
+          if (pd.radius < r * 0.1) {
+      pd.radius = r * (1.1 + Math.random() * 0.2);
+      pd.angle = Math.random() * Math.PI * 2;
+      pd.speed = 0.02 + Math.random() * 0.02;
+      pd.inSpeed = 2.5 + Math.random() * 1.5;
     }
-  }
-  break;
-}
-case 'voidpull': {
-  const diskA = c.getChildByName('vpDiskA');
-  const diskB = c.getChildByName('vpDiskB');
-  if (diskA) diskA.rotation -= 0.04;
-  if (diskB) diskB.rotation += 0.065;
-  break;
-}
+
+          dot.x = Math.cos(pd.angle) * pd.radius;
+          dot.y = Math.sin(pd.angle) * pd.radius;
+          const pct = pd.radius / (r * 1.4);
+          dot.alpha = pct;
+          dot.scale.set(0.3 + pct * 0.7);
+        }
+      }
+      break;
+    }
+    case 'voidpull': {
+      const diskA = c.getChildByName('vpDiskA');
+      const diskB = c.getChildByName('vpDiskB');
+      if (diskA) diskA.rotation -= 0.04;
+      if (diskB) diskB.rotation += 0.065;
+      break;
+    }
     case 'icicle':
       c.rotation = p.dir + Math.PI / 2;
       break;
@@ -1755,6 +1784,41 @@ case 'voidpull': {
       }
       break;
     }
+    case 'lavarock': {
+      const spr = c.getChildByName('lrSprite');
+      if (spr) { spr.rotation = (p.dir || 0); spr.width = r * 5; spr.height = r * 5; }
+      break;
+    }
+    case 'rockpush': {
+      const dir = p.dir || 0;
+      const age = now - (c._born || now);
+      c.alpha = age < 200 ? 1 : Math.max(0, 1 - (age - 200) / 500);
+      const spr = c.getChildByName('rfSprite');
+      if (spr) spr.rotation = dir;
+      const outline = c.getChildByName('rfOutline');
+      if (outline) {
+        outline.rotation = dir;
+        for (const ch of outline.children) ch.alpha = age < 200 ? 1 : Math.max(0, 1 - (age - 200) / 500);
+      }
+      if (trailLayer) {
+        const ROCK_COLORS = [0x8b5a2b, 0x7a4a20, 0xa0622a, 0x6b3d18, 0xb87840, 0x5c3010];
+        const count = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < count; i++) {
+          const spread = r * 1.0;
+          const bx = p.renderX - Math.cos(dir) * r * 1.2 + (Math.random() - 0.5) * spread;
+          const by = p.renderY - Math.sin(dir) * r * 1.2 + (Math.random() - 0.5) * spread;
+          const dot = new PIXI.Graphics();
+          const col = ROCK_COLORS[Math.floor(Math.random() * ROCK_COLORS.length)];
+          const pr = 3 + Math.random() * 6;
+          dot.beginFill(col, 1); dot.drawCircle(0, 0, pr); dot.endFill();
+          dot.lineStyle(1, 0x2a2018, 0.5); dot.drawCircle(0, 0, pr);
+          dot.x = bx; dot.y = by;
+          trailLayer.addChild(dot);
+          frenzyTrails.push({ g: dot, born: now, ttl: 300 + Math.random() * 200, fadeOnly: true });
+        }
+      }
+      break;
+    }
     case 'earthwave': {
       const dir = p.dir || 0;
       const spr = c.getChildByName('ewSprite');
@@ -1789,6 +1853,8 @@ case 'voidpull': {
       break;
     }
   }
+  const defCircle = c.getChildByName('defCircle');
+  if (defCircle) { defCircle.clear(); defCircle.beginFill(0x8888ff, 0.6); defCircle.drawCircle(0, 0, r); defCircle.endFill(); }
 }
 
 function removeProjSprite(id) {
