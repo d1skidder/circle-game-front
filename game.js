@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "wss://circle-game-5y2k.onrender.com";
+const WS_URL = "wss://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -21,7 +21,7 @@ const CLASS_STYLES = {
 let ws = null, myId = null, myClass = null, myName = '';
 let dead = false, killcount = 0, gameStartTime = 0;
 let pingIntervalId = null;
-let players = {}, projectiles = {}, obstacles = {};
+let players = {}, projectiles = {}, obstacles = {}, npcs = {};
 let capturePoint = {}, cpRenderPercent = 0;
 let zoom = 1.1, direction = 0;
 const pressed = {};
@@ -33,7 +33,7 @@ let frenzyTrails = [];
 let lightningParticles = [];
 let mapBg = null;
 let capturePointGraphic = null;
-let playerContainers = {}, projContainers = {}, obstacleSprites = {};
+let playerContainers = {}, projContainers = {}, obstacleSprites = {}, npcContainers = {};
 let texCache = {};
 let pixiReady = false;
 // –– GAME DATA ───────────────────────────────────────
@@ -179,7 +179,7 @@ function clearScene() {
   highPlayerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
   mapContainer.addChild(projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, playerLayer, bushLayer, highPlayerLayer, capturePointGraphic);
-  playerContainers = {}; projContainers = {}; obstacleSprites = {};
+  playerContainers = {}; projContainers = {}; obstacleSprites = {}; npcContainers = {};
   frenzyTrails = [];
   lightningParticles = [];
 
@@ -353,17 +353,38 @@ function handleMessage(msg) {
     updateDebugPlayers();
   }
 
+  if (msg.type === 'npcs') {
+    msg.npcs.forEach(p => {
+      if (!npcs[p.id]) {
+        npcs[p.id] = { ...p, renderX: p.x, renderY: p.y, renderDir: p.dir,
+          renderHealth: p.health, lastUpdateTime: now };
+      } else {
+        const prev = npcs[p.id];
+        const prevHealth = prev.health ?? p.health;
+        const prevdir = prev.renderDir;
+        Object.assign(prev, p, { lastUpdateTime: now });
+
+        // Spawn damage text if this npc took damage
+        const dmg = Math.round(prevHealth - p.health);
+        if (dmg > 0 || dmg < -1) {
+          spawnDamageText(p.x, p.y - 24, dmg, dmg >= 20);
+        }
+      }
+    });
+    for (const id in npcs) {
+      if (npcs[id].lastUpdateTime !== now) { removeNPCSprite(id); delete npcs[id]; }
+    }
+  }
+
   if (msg.type === 'projectiles') {
     msg.projectiles.forEach(p => {
-  if (!projectiles[p.id]) {
-    projectiles[p.id] = { ...p, renderX: p.x, renderY: p.y, lastUpdateTime: now };
-  } else {
-    const prev = projectiles[p.id];
-    const prevX = prev.x;
-    const prevY = prev.y;
-    Object.assign(prev, p, { lastUpdateTime: now, last_x: prevX, last_y: prevY });
-  }
-});
+      if (!projectiles[p.id]) {
+        projectiles[p.id] = { ...p, renderX: p.x, renderY: p.y, lastUpdateTime: now };
+      } else {
+        const prev = projectiles[p.id];
+        Object.assign(prev, p, { lastUpdateTime: now });
+      }
+    });
     for (const id in projectiles) {
       if (projectiles[id].lastUpdateTime !== now) { removeProjSprite(id); delete projectiles[id]; }
     }
@@ -578,6 +599,12 @@ function gameLoop() {
     p.renderX = lerp(p.last_x ?? p.x, p.x, t);
     p.renderY = lerp(p.last_y ?? p.y, p.y, t);
   }
+  for (const p of Object.values(npcs)) {
+    const t = Math.min((now - p.lastUpdateTime) / SERVER_TICK, 1);
+    p.renderX = lerp(p.last_x ?? p.x, p.x, t);
+    p.renderY = lerp(p.last_y ?? p.y, p.y, t);
+    p.renderHealth = lerp(p.renderHealth ?? p.health, p.health, 0.12);
+  }
 
   mapContainer.scale.set(zoom);
   mapContainer.x = app.screen.width  / 2 - pl.renderX * zoom;
@@ -588,6 +615,8 @@ function gameLoop() {
   for (const id of Object.keys(projContainers))    { if (!projectiles[id]) removeProjSprite(id); }
   for (const [id, p]  of Object.entries(players))  updatePlayerSprite(id, p, now);
   for (const id of Object.keys(playerContainers))  { if (!players[id]) removePlayerSprite(id); }
+  for (const [id, npc] of Object.entries(npcs)) updateNPCSprite(id, npc, now);
+  for (const id of Object.keys(npcContainers)) { if (!npcs[id]) removeNPCSprite(id); }
 
   capturePointGraphic.clear();
   if (gamemode === 2 && capturePoint.radius) {
@@ -971,6 +1000,70 @@ function removePlayerSprite(id) {
 }
 
 // ═══════════════════════════════════════════════════
+//  NPC SPRITES
+// ═══════════════════════════════════════════════════
+
+function getOrCreateNPC(id, type, radius) {
+  if (npcContainers[id]) return npcContainers[id];
+  const c = buildNPCContainer(type, radius);
+  const p = npcs[id];
+  if (p && p.renderX != null) {
+    c.x = p.renderX;
+    c.y = p.renderY;
+  }
+  playerLayer.addChild(c);
+  npcContainers[id] = c;
+  return c;
+}
+
+function buildNPCContainer(type, radius) {
+  const c = new PIXI.Container();
+  const def=new PIXI.Graphics();def.name='defHitbox';def.beginFill(0x8888ff,0.9);def.drawCircle(0,0,radius);def.endFill();c.addChild(def);
+  const hbg = new PIXI.Graphics(); hbg.name = 'hbg'; c.addChild(hbg);
+  const hfill = new PIXI.Graphics(); hfill.name = 'hfill'; c.addChild(hfill);
+  return c;
+}
+
+function updateNPCSprite(id, npc, now) {
+  const c = getOrCreateNPC(id, npc.type, npc.radius);
+  c.x = npc.renderX;
+  c.y = npc.renderY;
+
+  const hbg = c.getChildByName('hbg');
+  const hfill = c.getChildByName('hfill');
+  if (hbg && hfill) {
+    const bw = 54, bh = 8, bR = 4;
+    const bx = -bw / 2, by = npc.radius + 6;
+    hbg.clear();
+    hbg.lineStyle(1.5, 0x000000, 0.9);
+    hbg.beginFill(0x111111, 0.85);
+    hbg.drawRoundedRect(bx, by, bw, bh, bR);
+    hbg.endFill();
+
+    const maxHp = npc.maxHealth ?? 100;
+    const hpct = Math.max(0, Math.min(1, (npc.renderHealth ?? npc.health) / maxHp));
+    hfill.clear();
+    if (hpct > 0) {
+      const hColor = hpct > 0.6 ? 0x44ee66 : hpct > 0.3 ? 0xffcc22 : 0xff2233;
+      hfill.beginFill(hColor, 0.95);
+      hfill.drawRoundedRect(bx + 1, by + 1, (bw - 2) * hpct, bh - 2, bR - 1);
+      hfill.endFill();
+      hfill.beginFill(0xffffff, 0.18);
+      hfill.drawRoundedRect(bx + 1, by + 1, (bw - 2) * hpct, (bh - 2) * 0.45, bR - 1);
+      hfill.endFill();
+    }
+  }
+}
+
+function removeNPCSprite(id) {
+  if (npcContainers[id]) {
+    npcContainers[id].destroy({ children: true });
+    playerLayer.removeChild(npcContainers[id]);
+    delete npcContainers[id];
+  }
+}
+
+// ═══════════════════════════════════════════════════
 //  PROJECTILE SPRITES
 // ═══════════════════════════════════════════════════
 function getOrCreateProj(id, type, radius) {
@@ -1284,9 +1377,9 @@ function buildProjContainer(type, radius) {
 function updateProjSprite(id, p, now) {
   const c = getOrCreateProj(id, p.type, p.radius);
   if (p.type !== 'crusadecharge') {
-  c.x = p.renderX;
-  c.y = p.renderY;
-}
+    c.x = p.renderX;
+    c.y = p.renderY;
+  }
   const r = Math.max(5, p.radius || 10);
 
   const def = c.getChildByName('defHitbox');
