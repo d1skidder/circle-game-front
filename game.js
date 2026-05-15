@@ -1399,7 +1399,7 @@ function buildProjContainer(type, radius) {
       const def=new PIXI.Graphics();def.name='defCircle';def.beginFill(0x8888ff,0.4);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
   }
-  const def=new PIXI.Graphics();def.name='defCircle';def.beginFill(0x8888ff,0.4);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
+  //const def=new PIXI.Graphics();def.name='defCircle';def.beginFill(0x8888ff,0.4);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
   return proj;
 }
 
@@ -1853,8 +1853,8 @@ function updateProjSprite(id, p, now) {
       break;
     }
   }
-  //const defCircle = c.getChildByName('defCircle');
-  //if (defCircle) { defCircle.clear(); defCircle.beginFill(0x8888ff, 0.6); defCircle.drawCircle(0, 0, r); defCircle.endFill(); }
+  const defCircle = c.getChildByName('defCircle');
+  if (defCircle) { defCircle.clear(); defCircle.beginFill(0x8888ff, 0.6); defCircle.drawCircle(0, 0, r); defCircle.endFill(); }
 }
 
 function removeProjSprite(id) {
