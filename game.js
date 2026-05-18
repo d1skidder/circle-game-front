@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "wss://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -85,6 +85,22 @@ function initJoinScreen() {
       : null;
     myCode = document.getElementById('code-input').value.trim();
     if (!myName || !myClass) return;
+    document.getElementById('joinScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'block';
+    gameStartTime = Date.now();
+    dead = false; killcount = 0;
+    players = {}; projectiles = {}; obstacles = {};
+    clearScene();
+    if (!pixiReady) initPixi();
+    connectWS();
+  });
+
+  document.getElementById('spectate-btn').addEventListener('click', () => {
+    myName = 'spectator';
+    myClass = "fire"; // class doesn't matter for spectators, but set to something valid to avoid issues
+    sessionId = parseInt(document.getElementById('session-select').value, 10);
+    teamSelect = null;
+    myCode = 'spectator';
     document.getElementById('joinScreen').style.display = 'none';
     document.getElementById('gameScreen').style.display = 'block';
     gameStartTime = Date.now();

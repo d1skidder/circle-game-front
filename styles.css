@@ -36,6 +36,14 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0614; }
 }
 #join-btn:hover { background-color: #693ee8; box-shadow: 0 0 16px #b896ff; }
 #join-btn:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+#spectate-btn {
+  padding: 8px 24px; font-size: 14px; border: 1px solid #554466;
+  border-radius: 8px; background-color: transparent; color: #aa88cc;
+  cursor: pointer; font-family: inherit;
+  transition: background-color 0.2s, box-shadow 0.2s, color 0.2s;
+  display: block; margin: 24px auto 12px;
+}
+#spectate-btn:hover { background-color: #2a1a3a; color: #cc99ff; box-shadow: 0 0 10px #7744aa55; }
 #session-select, #team-select {
   padding: 10px 16px; width: 260px; font-size: 16px;
   border-radius: 8px; border: none;
