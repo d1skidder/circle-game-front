@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "wss://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -784,6 +784,14 @@ function updatePlayerSprite(id, p, now) {
     playerContainers[id] = c;
   }
   const c = playerContainers[id];
+
+  const viewerIsSpectator = !!players[myId]?.isSpectator;
+  if (p.isSpectator || p.isInvisible) {
+    c.visible = false;
+    return;
+  }
+  c.visible = true;
+  c.alpha = (!viewerIsSpectator && p.isHidden) ? 0.5 : 1;
 
   const targetLayer = p.isHigh ? highPlayerLayer : playerLayer;
   if (c.parent !== targetLayer) {
@@ -2200,23 +2208,33 @@ const uiMmDots = {};
 function drawUI(now, pl) {
   if (!_ui) return;
   dbgSet('dbg-fps', `⬤ FPS: ${Math.round(app.ticker.FPS)}`, app.ticker.FPS > 50 ? 'ok' : app.ticker.FPS > 30 ? 'warn' : 'error');
-  const { skillFills, sbW, sbH, sbGap, startX, barY, lbBg, lbRows, lbW, lbX, lbY, mmSize, mmX, mmY,
+  const { skillFills, skillBadges, skillLabels, skillBgs, sbW, sbH, sbGap, startX, barY, lbBg, lbRows, lbW, lbX, lbY, mmSize, mmX, mmY,
     cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond,
     tdmScore0, tdmSep, tdmScore1, cpScore0, cpScore1,
     hpStatText, manaStatText } = _ui;
 
-  const hp = Math.round(pl.renderHealth ?? pl.health ?? 0);
-  const mp = Math.round(pl.renderMana ?? pl.mana ?? 0);
-  const hpStr = `HP: ${hp}`;
-  const mpStr = `MP: ${mp}`;
-  if (hpStatText.text !== hpStr) hpStatText.text = hpStr;
-  if (manaStatText.text !== mpStr) manaStatText.text = mpStr;
-  const hpPct = hp / 100;
-  hpStatText.style.fill = hpPct > 0.6 ? 0x44ee66 : hpPct > 0.3 ? 0xffcc22 : 0xff4444;
+  const isMySpectator = !!pl.isSpectator;
+  hpStatText.visible = !isMySpectator;
+  manaStatText.visible = !isMySpectator;
+  skillBadges.forEach(b => { b.visible = !isMySpectator; });
+  skillLabels.forEach(l => { l.visible = !isMySpectator; });
+  skillBgs.forEach(b => { b.visible = !isMySpectator; });
+  skillFills.forEach(f => { if (isMySpectator) f.clear(); });
+
+  if (!isMySpectator) {
+    const hp = Math.round(pl.renderHealth ?? pl.health ?? 0);
+    const mp = Math.round(pl.renderMana ?? pl.mana ?? 0);
+    const hpStr = `HP: ${hp}`;
+    const mpStr = `MP: ${mp}`;
+    if (hpStatText.text !== hpStr) hpStatText.text = hpStr;
+    if (manaStatText.text !== mpStr) manaStatText.text = mpStr;
+    const hpPct = hp / 100;
+    hpStatText.style.fill = hpPct > 0.6 ? 0x44ee66 : hpPct > 0.3 ? 0xffcc22 : 0xff4444;
+  }
 
   // ── Skill cooldown bars ── polished fill with gloss
   const cds = [pl.renderSkill1cd ?? pl.skill1cd, pl.renderSkill2cd ?? pl.skill2cd, pl.renderSkill3cd ?? pl.skill3cd];
-  cds.forEach((cd, i) => {
+  if (!isMySpectator) cds.forEach((cd, i) => {
     const f = skillFills[i];
     const x = startX + i * (sbW + sbGap);
     f.clear();
@@ -2251,9 +2269,11 @@ function drawUI(now, pl) {
     }
     const dot = uiMmDots[id];
     dot.clear();
+    if (p.isSpectator) continue;
     const isEnemy = (gamemode === 1 || gamemode === 2) && players[myId] && p.team !== players[myId].team;
     const isAlly  = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
-    if (p.isHidden && id !== myId && !isAlly) continue;
+    const mmViewerIsSpectator = !!players[myId]?.isSpectator;
+    if (!mmViewerIsSpectator && p.isHidden && id !== myId && !isAlly) continue;
     const mmCx = mmX + p.renderX * mmScale;
     const mmCy = mmY + p.renderY * mmScale;
     if (id === myId) {
@@ -2280,7 +2300,7 @@ function drawUI(now, pl) {
     mmCpDiamond.closePath(); mmCpDiamond.endFill();
   }
 
-  const sorted = Object.entries(players).sort((a, b) => (b[1].killcount ?? 0) - (a[1].killcount ?? 0)).slice(0, 10);
+  const sorted = Object.entries(players).filter(([, p]) => !p.isSpectator).sort((a, b) => (b[1].killcount ?? 0) - (a[1].killcount ?? 0)).slice(0, 10);
   lbBg.clear();
   lbBg.beginFill(0x000000, 0.45);
   lbBg.lineStyle(1, 0x335533, 0.5);
@@ -2309,7 +2329,8 @@ function drawUI(now, pl) {
     const { nt, hbg, hfill, mbg, mfill } = getOrCreatePlayerUI(id);
 
     const isAlly = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
-    if (p.isHidden && id !== myId && !isAlly) {
+    const uiViewerIsSpectator = !!players[myId]?.isSpectator;
+    if (p.isSpectator || (!uiViewerIsSpectator && p.isHidden && id !== myId && !isAlly)) {
       nt.visible = false; hbg.visible = false; hfill.visible = false;
       mbg.visible = false; mfill.visible = false;
       continue;
