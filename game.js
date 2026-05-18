@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "https://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -40,6 +40,7 @@ let pixiReady = false;
 let sessionId = 0;
 let gamemode = 0;
 let teamSelect = null;
+let myCode = '';
 let team0score = 0, team1score = 0;
 
 // ── DAMAGE TEXT STATE ─────────────────────────────
@@ -82,6 +83,7 @@ function initJoinScreen() {
     teamSelect = (sessionId === 1 || sessionId === 2)
       ? parseInt(document.getElementById('team-select').value, 10)
       : null;
+    myCode = document.getElementById('code-input').value.trim();
     if (!myName || !myClass) return;
     document.getElementById('joinScreen').style.display = 'none';
     document.getElementById('gameScreen').style.display = 'block';
@@ -215,7 +217,9 @@ function generateTextures() {
   texCache.rock          = makeRockTexture();
   texCache.bush          = PIXI.Texture.from('assets/bush.webp');
   texCache.rockfist      = PIXI.Texture.from('assets/rockfist.webp');
-  texCache.lavapool      = PIXI.Texture.from('assets/lavapool.webp');
+  texCache.lavabug       = PIXI.Texture.from('assets/lavabug.webp');
+  texCache.goldenhelm    = PIXI.Texture.from('assets/goldenhelm.webp');
+  texCache.wingedhelm    = PIXI.Texture.from('assets/wingedhelm.webp');
   texCache.shockwaveFrames = Array.from({length: 8}, (_, i) =>
     PIXI.Texture.from(`assets/shockwave/Quake${i + 1}.PNG`)
   );
@@ -283,6 +287,7 @@ function connectWS() {
     dbgSet('dbg-id', '⬤ Session ID: joining...', 'warn');
     const joinMsg = { type: 'join', name: myName, class: myClass, session: sessionId };
     if (teamSelect !== null) joinMsg.team = teamSelect;
+    joinMsg.code = myCode;
     ws.send(JSON.stringify(joinMsg));
     if (pingIntervalId) clearInterval(pingIntervalId);
     pingIntervalId = setInterval(() => {
@@ -606,6 +611,7 @@ function gameLoop() {
     p.renderX = lerp(p.last_x ?? p.x, p.x, t);
     p.renderY = lerp(p.last_y ?? p.y, p.y, t);
     p.renderHealth = lerp(p.renderHealth ?? p.health, p.health, 0.12);
+    p.renderDir = lerpAngle(p.renderDir ?? p.dir, p.dir, 0.18);
   }
 
   mapContainer.scale.set(zoom);
@@ -731,6 +737,34 @@ function buildPlayerContainer(c, gameClass) {
   const wingL = new PIXI.Sprite(texCache.crusadeWing); wingL.anchor.set(0.5); wingL.name = 'wingL'; wingL.visible = false; c.addChild(wingL);
   const wingR = new PIXI.Sprite(texCache.crusadeWing); wingR.anchor.set(0.5); wingR.name = 'wingR'; wingR.visible = false; c.addChild(wingR);
 
+  // Golden helm cosmetic — rendered on top of body
+  const goldenhelmOutline = buildSpriteOutline(texCache.goldenhelm, 0.12, 0.12 * 0.87, -Math.PI / 2, 0x000000, 1);
+  goldenhelmOutline.x = -37; goldenhelmOutline.name = 'goldenhelmOutline'; goldenhelmOutline.visible = false;
+  c.addChild(goldenhelmOutline);
+  const goldenhelm = new PIXI.Sprite(texCache.goldenhelm);
+  goldenhelm.anchor.set(0.5, 0.5);
+  goldenhelm.scale.set(0.12);
+  goldenhelm.x = -37;
+  goldenhelm.height *= 0.87;
+  goldenhelm.rotation = -Math.PI / 2;
+  goldenhelm.name = 'goldenhelm';
+  goldenhelm.visible = false;
+  c.addChild(goldenhelm);
+
+  // Winged helm cosmetic
+  const wingedhelmOutline = buildSpriteOutline(texCache.wingedhelm, 0.125, 0.125 * 0.95, -Math.PI / 2, 0x000000, 1);
+  wingedhelmOutline.x = -40; wingedhelmOutline.name = 'wingedhelmOutline'; wingedhelmOutline.visible = false;
+  c.addChild(wingedhelmOutline);
+  const wingedhelm = new PIXI.Sprite(texCache.wingedhelm);
+  wingedhelm.anchor.set(0.5, 0.5);
+  wingedhelm.scale.set(0.125);
+  wingedhelm.x = -40;
+  wingedhelm.height *= 0.95;
+  wingedhelm.rotation = -Math.PI / 2;
+  wingedhelm.name = 'wingedhelm';
+  wingedhelm.visible = false;
+  c.addChild(wingedhelm);
+
   // Name tag
   const nt = new PIXI.Text('', {
     fontSize: 16,
@@ -807,7 +841,7 @@ function updatePlayerSprite(id, p, now) {
       const baseAlpha = 0.12 + heat * 0.1;
       const ringAlpha = 0.25 + heat * 0.15;
       const flareAlpha = 0.55 + heat * 0.15;
-      const outerR = 24 + heat * 4;
+      const outerR = 32 + heat * 5;
       const pulse = Math.sin(now / (120 - heat * 25));
       const flickerA = Math.sin(now / 60 + 1.3);
       const flickerB = Math.sin(now / 80 + 2.7);
@@ -989,6 +1023,24 @@ function updatePlayerSprite(id, p, now) {
     }
   }
 
+  // ── GOLDEN HELM COSMETIC ──
+  const goldenhelm = c.getChildByName('goldenhelm');
+  const goldenhelmOutline = c.getChildByName('goldenhelmOutline');
+  if (goldenhelm) {
+    const show = p.cosmetic === 'goldenhelm';
+    goldenhelm.visible = show;
+    if (goldenhelmOutline) goldenhelmOutline.visible = show;
+  }
+
+  // ── WINGED HELM COSMETIC ──
+  const wingedhelm = c.getChildByName('wingedhelm');
+  const wingedhelmOutline = c.getChildByName('wingedhelmOutline');
+  if (wingedhelm) {
+    const show = p.cosmetic === 'wingedhelm';
+    wingedhelm.visible = show;
+    if (wingedhelmOutline) wingedhelmOutline.visible = show;
+  }
+
   if (id === myId) killcount = p.killcount ?? 0;
 }
 
@@ -1005,9 +1057,9 @@ function removePlayerSprite(id) {
 //  NPC SPRITES
 // ═══════════════════════════════════════════════════
 
-function getOrCreateNPC(id, type, radius) {
+function getOrCreateNPC(id, type, radius, name) {
   if (npcContainers[id]) return npcContainers[id];
-  const c = buildNPCContainer(type, radius);
+  const c = buildNPCContainer(type, radius, name);
   const p = npcs[id];
   if (p && p.renderX != null) {
     c.x = p.renderX;
@@ -1018,18 +1070,45 @@ function getOrCreateNPC(id, type, radius) {
   return c;
 }
 
-function buildNPCContainer(type, radius) {
+function buildNPCContainer(type, radius, name) {
   const c = new PIXI.Container();
-  const def=new PIXI.Graphics();def.name='defHitbox';def.beginFill(0x8888ff,0.9);def.drawCircle(0,0,radius);def.endFill();c.addChild(def);
+  if (name === 'lavabug') {
+    const w = radius * 4.5, h = radius * 3.5, thickness = 2;
+    const outline = new PIXI.Container(); outline.name = 'lavabugOutline';
+    for (const [ox, oy] of [[-thickness,0],[thickness,0],[0,-thickness],[0,thickness],[-thickness,-thickness],[thickness,-thickness],[-thickness,thickness],[thickness,thickness]]) {
+      const sh = new PIXI.Sprite(texCache.lavabug);
+      sh.anchor.set(0.5); sh.width = w; sh.height = h;
+      sh.tint = 0x000000; sh.x = ox; sh.y = oy;
+      outline.addChild(sh);
+    }
+    c.addChild(outline);
+    const spr = new PIXI.Sprite(texCache.lavabug);
+    spr.anchor.set(0.5);
+    spr.width = w;
+    spr.height = h;
+    spr.name = 'lavabugSpr';
+    c.addChild(spr);
+  } else {
+    const def = new PIXI.Graphics(); def.name = 'defHitbox'; def.beginFill(0x8888ff, 0.9); def.drawCircle(0, 0, radius); def.endFill(); c.addChild(def);
+  }
+  //const def = new PIXI.Graphics(); def.name = 'defHitbox'; def.beginFill(0x8888ff, 0.9); def.drawCircle(0, 0, radius); def.endFill(); c.addChild(def);
   const hbg = new PIXI.Graphics(); hbg.name = 'hbg'; c.addChild(hbg);
   const hfill = new PIXI.Graphics(); hfill.name = 'hfill'; c.addChild(hfill);
   return c;
 }
 
 function updateNPCSprite(id, npc, now) {
-  const c = getOrCreateNPC(id, npc.type, npc.radius);
+  const c = getOrCreateNPC(id, npc.type, npc.radius, npc.name);
   c.x = npc.renderX;
   c.y = npc.renderY;
+
+  const lavabugSpr = c.getChildByName('lavabugSpr');
+  const lavabugOutline = c.getChildByName('lavabugOutline');
+  if (npc.renderDir != null) {
+    const rot = npc.renderDir - Math.PI / 2;
+    if (lavabugSpr) lavabugSpr.rotation = rot;
+    if (lavabugOutline) lavabugOutline.rotation = rot;
+  }
 
   const hbg = c.getChildByName('hbg');
   const hfill = c.getChildByName('hfill');
@@ -1360,14 +1439,6 @@ function buildProjContainer(type, radius) {
       proj._born = Date.now();
       break;
     }
-    case 'lavarock': {
-      const spr = new PIXI.Sprite(texCache.lavapool);
-      spr.anchor.set(0.5);
-      spr.width = r * 5; spr.height = r * 5;
-      spr.name = 'lrSprite';
-      proj.addChild(spr);
-      break;
-    }
     case 'earthwave': {
       const ewW = r * 5, ewH = r * 3.5, ewThick = 1;
       const shadow = new PIXI.Sprite(texCache.earthWave); shadow.name = 'ewShadow';
@@ -1393,6 +1464,20 @@ function buildProjContainer(type, radius) {
       const trail = new PIXI.Graphics();
       trail.name = 'ewTrail';
       proj.addChild(trail);
+      break;
+    }
+    case 'lavapool': {
+      const g = new PIXI.Graphics(); g.name = 'lavapoolCircle';
+      g.beginFill(0xff0000, 0.5); g.drawCircle(0, 0, r); g.endFill();
+      g.lineStyle(2, 0xff0000, 1); g.drawCircle(0, 0, r);
+      proj.addChild(g);
+      proj._born = Date.now();
+      break;
+    }
+    case 'lavarock': {
+      const g = new PIXI.Graphics(); g.name = 'lavarockCircle';
+      g.beginFill(0xff4400, 1); g.drawCircle(0, 0, r); g.endFill();
+      proj.addChild(g);
       break;
     }
     default: {
@@ -1784,11 +1869,6 @@ function updateProjSprite(id, p, now) {
       }
       break;
     }
-    case 'lavarock': {
-      const spr = c.getChildByName('lrSprite');
-      if (spr) { spr.rotation = (p.dir || 0); spr.width = r * 5; spr.height = r * 5; }
-      break;
-    }
     case 'rockpush': {
       const dir = p.dir || 0;
       const age = now - (c._born || now);
@@ -1852,9 +1932,52 @@ function updateProjSprite(id, p, now) {
       }
       break;
     }
+    case 'lavapool': {
+      if (!c._born) c._born = now;
+      const elapsed = now - c._born;
+      if (elapsed >= 1000 && !c._exploded) {
+        c._exploded = true;
+        const cx = c.x, cy = c.y;
+        const ring = new PIXI.Graphics();
+        ring.lineStyle(4, 0xff4400, 0.9);
+        ring.drawCircle(0, 0, r);
+        ring.x = cx; ring.y = cy;
+        trailLayer.addChild(ring);
+        frenzyTrails.push({ g: ring, born: now, ttl: 400, scaleEnd: 4, fadeOnly: false });
+        for (let i = 0; i < 20; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = r * (1.5 + Math.random() * 2.5);
+          const dot = new PIXI.Graphics();
+          const col = [0xff4400, 0xff8800, 0xffcc44, 0xcc2200, 0xff2200][Math.floor(Math.random() * 5)];
+          dot.beginFill(col, 1.0); dot.drawCircle(0, 0, 2 + Math.random() * 3); dot.endFill();
+          dot.x = cx + Math.cos(angle) * r * 0.5;
+          dot.y = cy + Math.sin(angle) * r * 0.5;
+          dot._vx = Math.cos(angle) * speed; dot._vy = Math.sin(angle) * speed;
+          trailLayer.addChild(dot);
+          frenzyTrails.push({ g: dot, born: now, ttl: 450 + Math.random() * 200, isHsParticle: true });
+        }
+        const flash = new PIXI.Graphics();
+        flash.beginFill(0xff6600, 0.85); flash.drawCircle(0, 0, r * 1.5); flash.endFill();
+        flash.x = cx; flash.y = cy;
+        trailLayer.addChild(flash);
+        frenzyTrails.push({ g: flash, born: now, ttl: 200, fadeOnly: true });
+      }
+      break;
+    }
   }
   const defCircle = c.getChildByName('defCircle');
   if (defCircle) { defCircle.clear(); defCircle.beginFill(0x8888ff, 0.6); defCircle.drawCircle(0, 0, r); defCircle.endFill(); }
+  const lavarockCircle = c.getChildByName('lavarockCircle');
+  if (lavarockCircle) { lavarockCircle.clear(); lavarockCircle.beginFill(0xff4400, 1); lavarockCircle.drawCircle(0, 0, r); lavarockCircle.endFill(); }
+  const lavapoolCircle = c.getChildByName('lavapoolCircle');
+  if (lavapoolCircle) {
+    lavapoolCircle.clear();
+    if (c._exploded) {
+      lavapoolCircle.beginFill(0xff4400, 1); lavapoolCircle.drawCircle(0, 0, r); lavapoolCircle.endFill();
+    } else {
+      lavapoolCircle.beginFill(0xff0000, 0.5); lavapoolCircle.drawCircle(0, 0, r); lavapoolCircle.endFill(); lavapoolCircle.lineStyle(2, 0xff0000, 1); lavapoolCircle.drawCircle(0, 0, r);
+    }
+  }
 }
 
 function removeProjSprite(id) {
@@ -2128,11 +2251,11 @@ function drawUI(now, pl) {
     }
     const dot = uiMmDots[id];
     dot.clear();
-    if (p.isHidden && id !== myId) continue;
-    const mmCx = mmX + p.renderX * mmScale;
-    const mmCy = mmY + p.renderY * mmScale;
     const isEnemy = (gamemode === 1 || gamemode === 2) && players[myId] && p.team !== players[myId].team;
     const isAlly  = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
+    if (p.isHidden && id !== myId && !isAlly) continue;
+    const mmCx = mmX + p.renderX * mmScale;
+    const mmCy = mmY + p.renderY * mmScale;
     if (id === myId) {
       const st = CLASS_STYLES[p.gameClass] || CLASS_STYLES.fire;
       dot.beginFill(st.body, 0.85); dot.drawCircle(mmCx, mmCy, 4); dot.endFill();
@@ -2185,7 +2308,8 @@ function drawUI(now, pl) {
     const sy = p.renderY * zoom + mapContainer.y;
     const { nt, hbg, hfill, mbg, mfill } = getOrCreatePlayerUI(id);
 
-    if (p.isHidden && id !== myId) {
+    const isAlly = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
+    if (p.isHidden && id !== myId && !isAlly) {
       nt.visible = false; hbg.visible = false; hfill.visible = false;
       mbg.visible = false; mfill.visible = false;
       continue;
@@ -2196,7 +2320,6 @@ function drawUI(now, pl) {
     if (name.length > 18) name = name.substring(0, 18) + '…';
     const nameText = name + (p.killcount > 0 ? ` ☠${p.killcount}` : '');
     if (nt.text !== nameText) nt.text = nameText;
-    const isAlly = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
     nt.style.fill = id === myId ? 0x44ee66 : isAlly ? 0xaaccff : 0xff4444;
     nt.x = sx;
     nt.y = sy - 42 * zoom;
