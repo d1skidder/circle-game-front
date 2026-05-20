@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "wss://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 
@@ -73,14 +73,14 @@ function initJoinScreen() {
 
   document.getElementById('session-select').addEventListener('change', () => {
     const val = parseInt(document.getElementById('session-select').value, 10);
-    document.getElementById('team-select').style.display = (val === 1 || val === 2) ? 'block' : 'none';
+    document.getElementById('team-select').style.display = (val === 1 || val === 2 || val === 3) ? 'block' : 'none';
   });
 
   document.getElementById('join-btn').addEventListener('click', () => {
     myName = document.getElementById('name-input').value.trim();
     myClass = selectedClass;
     sessionId = parseInt(document.getElementById('session-select').value, 10);
-    teamSelect = (sessionId === 1 || sessionId === 2)
+    teamSelect = (sessionId === 1 || sessionId === 2 || sessionId === 3)
       ? parseInt(document.getElementById('team-select').value, 10)
       : null;
     myCode = document.getElementById('code-input').value.trim();
@@ -753,33 +753,33 @@ function buildPlayerContainer(c, gameClass) {
   const wingL = new PIXI.Sprite(texCache.crusadeWing); wingL.anchor.set(0.5); wingL.name = 'wingL'; wingL.visible = false; c.addChild(wingL);
   const wingR = new PIXI.Sprite(texCache.crusadeWing); wingR.anchor.set(0.5); wingR.name = 'wingR'; wingR.visible = false; c.addChild(wingR);
 
-  // Golden helm cosmetic — rendered on top of body
+  // Golden helm cosmetic — group ensures outline always renders behind sprite
+  const goldenhelmGroup = new PIXI.Container();
+  goldenhelmGroup.name = 'goldenhelmGroup'; goldenhelmGroup.visible = false; goldenhelmGroup.x = -37;
   const goldenhelmOutline = buildSpriteOutline(texCache.goldenhelm, 0.12, 0.12 * 0.87, -Math.PI / 2, 0x000000, 1);
-  goldenhelmOutline.x = -37; goldenhelmOutline.name = 'goldenhelmOutline'; goldenhelmOutline.visible = false;
-  c.addChild(goldenhelmOutline);
+  goldenhelmGroup.addChild(goldenhelmOutline);
   const goldenhelm = new PIXI.Sprite(texCache.goldenhelm);
   goldenhelm.anchor.set(0.5, 0.5);
   goldenhelm.scale.set(0.12);
-  goldenhelm.x = -37;
   goldenhelm.height *= 0.87;
   goldenhelm.rotation = -Math.PI / 2;
   goldenhelm.name = 'goldenhelm';
-  goldenhelm.visible = false;
-  c.addChild(goldenhelm);
+  goldenhelmGroup.addChild(goldenhelm);
+  c.addChild(goldenhelmGroup);
 
   // Winged helm cosmetic
+  const wingedhelmGroup = new PIXI.Container();
+  wingedhelmGroup.name = 'wingedhelmGroup'; wingedhelmGroup.visible = false; wingedhelmGroup.x = -40;
   const wingedhelmOutline = buildSpriteOutline(texCache.wingedhelm, 0.125, 0.125 * 0.95, -Math.PI / 2, 0x000000, 1);
-  wingedhelmOutline.x = -40; wingedhelmOutline.name = 'wingedhelmOutline'; wingedhelmOutline.visible = false;
-  c.addChild(wingedhelmOutline);
+  wingedhelmGroup.addChild(wingedhelmOutline);
   const wingedhelm = new PIXI.Sprite(texCache.wingedhelm);
   wingedhelm.anchor.set(0.5, 0.5);
   wingedhelm.scale.set(0.125);
-  wingedhelm.x = -40;
   wingedhelm.height *= 0.95;
   wingedhelm.rotation = -Math.PI / 2;
   wingedhelm.name = 'wingedhelm';
-  wingedhelm.visible = false;
-  c.addChild(wingedhelm);
+  wingedhelmGroup.addChild(wingedhelm);
+  c.addChild(wingedhelmGroup);
 
   // Name tag
   const nt = new PIXI.Text('', {
@@ -1048,22 +1048,12 @@ function updatePlayerSprite(id, p, now) {
   }
 
   // ── GOLDEN HELM COSMETIC ──
-  const goldenhelm = c.getChildByName('goldenhelm');
-  const goldenhelmOutline = c.getChildByName('goldenhelmOutline');
-  if (goldenhelm) {
-    const show = p.cosmetic === 'goldenhelm';
-    goldenhelm.visible = show;
-    if (goldenhelmOutline) goldenhelmOutline.visible = show;
-  }
+  const goldenhelmGroup = c.getChildByName('goldenhelmGroup');
+  if (goldenhelmGroup) goldenhelmGroup.visible = p.cosmetic === 'goldenhelm';
 
   // ── WINGED HELM COSMETIC ──
-  const wingedhelm = c.getChildByName('wingedhelm');
-  const wingedhelmOutline = c.getChildByName('wingedhelmOutline');
-  if (wingedhelm) {
-    const show = p.cosmetic === 'wingedhelm';
-    wingedhelm.visible = show;
-    if (wingedhelmOutline) wingedhelmOutline.visible = show;
-  }
+  const wingedhelmGroup = c.getChildByName('wingedhelmGroup');
+  if (wingedhelmGroup) wingedhelmGroup.visible = p.cosmetic === 'wingedhelm';
 
   if (id === myId) killcount = p.killcount ?? 0;
 }
@@ -1498,8 +1488,22 @@ function buildProjContainer(type, radius) {
       proj._born = Date.now();
       break;
     }
+    case 'minilavapool': {
+      const g = new PIXI.Graphics(); g.name = 'lavapoolCircle';
+      g.beginFill(0xff0000, 0.5); g.drawCircle(0, 0, r); g.endFill();
+      g.lineStyle(2, 0xff0000, 1); g.drawCircle(0, 0, r);
+      proj.addChild(g);
+      proj._born = Date.now();
+      break;
+    }
     case 'lavarock': {
       const g = new PIXI.Graphics(); g.name = 'lavarockCircle';
+      g.beginFill(0xff4400, 1); g.drawCircle(0, 0, r); g.endFill();
+      proj.addChild(g);
+      break;
+    }
+    case 'lavaball': {
+      const g = new PIXI.Graphics(); g.name = 'lavaballCircle';
       g.beginFill(0xff4400, 1); g.drawCircle(0, 0, r); g.endFill();
       proj.addChild(g);
       break;
@@ -1956,6 +1960,38 @@ function updateProjSprite(id, p, now) {
       }
       break;
     }
+    case 'minilavapool': {
+      if (!c._born) c._born = now;
+      const elapsed = now - c._born;
+      if (elapsed >= 500 && !c._exploded) {
+        c._exploded = true;
+        const cx = c.x, cy = c.y;
+        const ring = new PIXI.Graphics();
+        ring.lineStyle(4, 0xff4400, 0.9);
+        ring.drawCircle(0, 0, r);
+        ring.x = cx; ring.y = cy;
+        trailLayer.addChild(ring);
+        frenzyTrails.push({ g: ring, born: now, ttl: 400, scaleEnd: 4, fadeOnly: false });
+        for (let i = 0; i < 20; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = r * (1.5 + Math.random() * 2.5);
+          const dot = new PIXI.Graphics();
+          const col = [0xff4400, 0xff8800, 0xffcc44, 0xcc2200, 0xff2200][Math.floor(Math.random() * 5)];
+          dot.beginFill(col, 1.0); dot.drawCircle(0, 0, 2 + Math.random() * 3); dot.endFill();
+          dot.x = cx + Math.cos(angle) * r * 0.5;
+          dot.y = cy + Math.sin(angle) * r * 0.5;
+          dot._vx = Math.cos(angle) * speed; dot._vy = Math.sin(angle) * speed;
+          trailLayer.addChild(dot);
+          frenzyTrails.push({ g: dot, born: now, ttl: 450 + Math.random() * 200, isHsParticle: true });
+        }
+        const flash = new PIXI.Graphics();
+        flash.beginFill(0xff6600, 0.85); flash.drawCircle(0, 0, r * 1.5); flash.endFill();
+        flash.x = cx; flash.y = cy;
+        trailLayer.addChild(flash);
+        frenzyTrails.push({ g: flash, born: now, ttl: 200, fadeOnly: true });
+      }
+      break;
+    }
     case 'lavapool': {
       if (!c._born) c._born = now;
       const elapsed = now - c._born;
@@ -1993,6 +2029,8 @@ function updateProjSprite(id, p, now) {
   if (defCircle) { defCircle.clear(); defCircle.beginFill(0x8888ff, 0.6); defCircle.drawCircle(0, 0, r); defCircle.endFill(); }
   const lavarockCircle = c.getChildByName('lavarockCircle');
   if (lavarockCircle) { lavarockCircle.clear(); lavarockCircle.beginFill(0xff4400, 1); lavarockCircle.drawCircle(0, 0, r); lavarockCircle.endFill(); }
+  const lavaballCircle = c.getChildByName('lavaballCircle');
+  if (lavaballCircle) { lavaballCircle.clear(); lavaballCircle.beginFill(0xff4400, 1); lavaballCircle.drawCircle(0, 0, r); lavaballCircle.endFill(); }
   const lavapoolCircle = c.getChildByName('lavapoolCircle');
   if (lavapoolCircle) {
     lavapoolCircle.clear();
