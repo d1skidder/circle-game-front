@@ -3,9 +3,11 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "https://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "wss"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
+const BASE_VIEW_WIDTH  = 4800;
+const BASE_VIEW_HEIGHT = 2700;
 
 const CLASS_STYLES = {
   fire:      { body: 0xd14821, bodyHi: 0xff7744, arm: 0xb03010, outline: 0x661500 },
@@ -52,6 +54,10 @@ function lerpAngle(a, b, t) {
   while (c < -Math.PI) c += Math.PI * 2;
   while (c >  Math.PI) c -= Math.PI * 2;
   return a + c * t;
+}
+function getMinZoom() {
+  if (!app) return 0.4;
+  return Math.max(app.screen.width / BASE_VIEW_WIDTH, app.screen.height / BASE_VIEW_HEIGHT);
 }
 
 // ═══════════════════════════════════════════════════
@@ -452,8 +458,9 @@ document.addEventListener('mousemove', e => {
   if (!app) return;
   const pl = players[myId];
   if (!pl) return;
-  const wx = (e.clientX - app.screen.width  / 2) / zoom + pl.renderX;
-  const wy = (e.clientY - app.screen.height / 2) / zoom + pl.renderY;
+  const ez = Math.max(zoom, getMinZoom());
+  const wx = (e.clientX - app.screen.width  / 2) / ez + pl.renderX;
+  const wy = (e.clientY - app.screen.height / 2) / ez + pl.renderY;
   direction = Math.atan2(wy - pl.renderY, wx - pl.renderX);
   pl.renderDir = direction;
 });
@@ -462,7 +469,11 @@ document.addEventListener('mousedown', e => {
     sendAttack('basicMelee');
 });
 document.addEventListener('wheel', e => {
-  zoom = e.deltaY > 0 ? Math.min(2.0, zoom + 0.05) : Math.max(0.4, zoom - 0.05);
+  zoom = e.deltaY > 0 ? Math.min(4.0, zoom + 0.05) : Math.max(getMinZoom(), zoom - 0.05);
+});
+window.addEventListener('resize', () => {
+  const min = getMinZoom();
+  if (zoom < min) zoom = min;
 });
 function sendAttack(move) {
   if (ws && ws.readyState === WebSocket.OPEN)
@@ -630,9 +641,10 @@ function gameLoop() {
     p.renderDir = lerpAngle(p.renderDir ?? p.dir, p.dir, 0.18);
   }
 
-  mapContainer.scale.set(zoom);
-  mapContainer.x = app.screen.width  / 2 - pl.renderX * zoom;
-  mapContainer.y = app.screen.height / 2 - pl.renderY * zoom;
+  const effectiveZoom = Math.max(zoom, getMinZoom());
+  mapContainer.scale.set(effectiveZoom);
+  mapContainer.x = app.screen.width  / 2 - pl.renderX * effectiveZoom;
+  mapContainer.y = app.screen.height / 2 - pl.renderY * effectiveZoom;
 
   for (const [id, ob] of Object.entries(obstacles)) getOrCreateObstacle(id, ob);
   for (const [id, p]  of Object.entries(projectiles)) updateProjSprite(id, p, now);
@@ -2138,6 +2150,9 @@ function initUI() {
   const mmCpDiamond = new PIXI.Graphics();
   uiContainer.addChild(mmCpDiamond);
 
+  const mmViewRect = new PIXI.Graphics();
+  uiContainer.addChild(mmViewRect);
+
   const statTextStyle = { fontSize: 14, fill: 0xffffff, fontWeight: '700', dropShadow: true, dropShadowDistance: 1, dropShadowAlpha: 0.8 };
   const mmStatX = mmX + mmSize + 10;
   const hpStatText = new PIXI.Text('', statTextStyle);
@@ -2218,7 +2233,7 @@ function initUI() {
   _ui = { skillLabels, skillBadges, skillBgs, skillFills, skillOutlines,
     miniMap, lbBg, lbTitle, lbRows,
     sbW, sbH, sbGap, startX, barY, lbW, lbX, lbY, mmSize, mmX, mmY,
-    cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond,
+    cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond, mmViewRect,
     tdmScore0, tdmSep, tdmScore1, cpScore0, cpScore1,
     hpStatText, manaStatText };
 }
@@ -2262,10 +2277,60 @@ const uiMmDots = {};
 function drawUI(now, pl) {
   if (!_ui) return;
   dbgSet('dbg-fps', `⬤ FPS: ${Math.round(app.ticker.FPS)}`, app.ticker.FPS > 50 ? 'ok' : app.ticker.FPS > 30 ? 'warn' : 'error');
-  const { skillFills, skillBadges, skillLabels, skillBgs, sbW, sbH, sbGap, startX, barY, lbBg, lbRows, lbW, lbX, lbY, mmSize, mmX, mmY,
-    cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond,
+  const { skillFills, skillBadges, skillLabels, skillBgs, lbBg, lbTitle, lbRows,
+    cpBg, cpFill, cpText, mmCpDiamond, mmViewRect, miniMap,
     tdmScore0, tdmSep, tdmScore1, cpScore0, cpScore1,
-    hpStatText, manaStatText } = _ui;
+    hpStatText, manaStatText,
+    sbW, sbH, sbGap, mmSize, lbW, cpBarW, cpBarH } = _ui;
+
+  const W = app.screen.width, H = app.screen.height;
+  const totalW = sbW * 3 + sbGap * 2;
+  const startX = W / 2 - totalW / 2, barY = H - 42;
+  const mmX = 10, mmY = H - mmSize - 10;
+  const lbX = W - lbW - 10, lbY = 10;
+  const cpBarX = W / 2 - cpBarW / 2, cpBarY = 14;
+  const mmStatX = mmX + mmSize + 10;
+
+  skillBadges.forEach((badge, i) => {
+    badge.clear();
+    badge.lineStyle(1.5, 0x000000, 0.7);
+    badge.beginFill(0x111111, 0.88);
+    badge.drawRoundedRect(startX + i * (sbW + sbGap) + sbW / 2 - 11, barY - 26, 22, 20, 5);
+    badge.endFill();
+  });
+  skillLabels.forEach((t, i) => {
+    t.x = startX + sbW / 2 + i * (sbW + sbGap);
+    t.y = barY - 16;
+  });
+  skillBgs.forEach((bg, i) => {
+    bg.clear();
+    bg.lineStyle(1.5, 0x000000, 0.9);
+    bg.beginFill(0x0d0d0d, 0.82);
+    bg.drawRoundedRect(startX + i * (sbW + sbGap), barY, sbW, sbH, 7);
+    bg.endFill();
+  });
+  miniMap.clear();
+  miniMap.beginFill(0x324e2a, 0.5);
+  miniMap.drawRect(mmX + 1, mmY + 1, mmSize - 2, mmSize - 2);
+  miniMap.endFill();
+  hpStatText.x = mmStatX;
+  hpStatText.y = mmY + mmSize - 38;
+  manaStatText.x = mmStatX;
+  manaStatText.y = mmY + mmSize - 18;
+  lbTitle.x = lbX + 10;
+  lbTitle.y = lbY + 8;
+  lbRows.forEach(({ row, kills }, i) => {
+    row.x = lbX + 10;
+    row.y = lbY + 28 + i * 26;
+    kills.x = lbX + lbW - 10;
+    kills.y = lbY + 28 + i * 26;
+  });
+  cpText.x = W / 2;
+  cpText.y = cpBarY + cpBarH / 2;
+  cpScore0.x = cpBarX - 10;
+  cpScore0.y = cpBarY + cpBarH / 2;
+  cpScore1.x = cpBarX + cpBarW + 10;
+  cpScore1.y = cpBarY + cpBarH / 2;
 
   const isMySpectator = !!pl.isSpectator;
   hpStatText.visible = !isMySpectator;
@@ -2354,6 +2419,20 @@ function drawUI(now, pl) {
     mmCpDiamond.closePath(); mmCpDiamond.endFill();
   }
 
+  mmViewRect.clear();
+  const mmViewerPl = players[myId];
+  if (mmViewerPl) {
+    const mmZoom = Math.max(zoom, getMinZoom());
+    const vpW = (app.screen.width / mmZoom) * mmScale;
+    const vpH = (app.screen.height / mmZoom) * mmScale;
+    const vpX = mmX + (mmViewerPl.renderX - app.screen.width / 2 / mmZoom) * mmScale;
+    const vpY = mmY + (mmViewerPl.renderY - app.screen.height / 2 / mmZoom) * mmScale;
+    mmViewRect.lineStyle(1, 0xffffff, 0.8);
+    mmViewRect.beginFill(0xffffff, 0.15);
+    mmViewRect.drawRect(vpX, vpY, vpW, vpH);
+    mmViewRect.endFill();
+  }
+
   const sorted = Object.entries(players).filter(([, p]) => !p.isSpectator).sort((a, b) => (b[1].killcount ?? 0) - (a[1].killcount ?? 0)).slice(0, 10);
   lbBg.clear();
   lbBg.beginFill(0x000000, 0.45);
@@ -2377,9 +2456,10 @@ function drawUI(now, pl) {
     }
   });
 
+  const uiZoom = Math.max(zoom, getMinZoom());
   for (const [id, p] of Object.entries(players)) {
-    const sx = p.renderX * zoom + mapContainer.x;
-    const sy = p.renderY * zoom + mapContainer.y;
+    const sx = p.renderX * uiZoom + mapContainer.x;
+    const sy = p.renderY * uiZoom + mapContainer.y;
     const { nt, hbg, hfill, mbg, mfill } = getOrCreatePlayerUI(id);
 
     const isAlly = (gamemode === 1 || gamemode === 2) && players[myId] && p.team === players[myId].team && id !== myId;
@@ -2397,16 +2477,16 @@ function drawUI(now, pl) {
     if (nt.text !== nameText) nt.text = nameText;
     nt.style.fill = id === myId ? 0x44ee66 : isAlly ? 0xaaccff : 0xff4444;
     nt.x = sx;
-    nt.y = sy - 42 * zoom;
+    nt.y = sy - 42 * uiZoom;
 
     // ── Health bar — pill style, gloss highlight ──
-    const bw = 54 * zoom, bh = 8 * zoom, bR = 4;
-    const bx = sx - bw / 2, by = sy + 26 * zoom;
+    const bw = 54 * uiZoom, bh = 8 * uiZoom, bR = 4;
+    const bx = sx - bw / 2, by = sy + 26 * uiZoom;
 
     hbg.clear();
     // track
-    hbg.lineStyle(1.5*zoom, 0x000000, 0.9);
-    hbg.beginFill(0x111111, 0.85*zoom);
+    hbg.lineStyle(1.5*uiZoom, 0x000000, 0.9);
+    hbg.beginFill(0x111111, 0.85);
     hbg.drawRoundedRect(bx, by, bw, bh, bR);
     hbg.endFill();
 
@@ -2425,9 +2505,9 @@ function drawUI(now, pl) {
 
     if (id === myId) {
       // ── Mana bar — thinner, blue, same polish ──
-      const mby = by + bh + 3 * zoom, mbh = 8 * zoom, mbR = 3;
+      const mby = by + bh + 3 * uiZoom, mbh = 8 * uiZoom, mbR = 3;
       mbg.clear();
-      mbg.lineStyle(1.5*zoom, 0x000000, 0.85);
+      mbg.lineStyle(1.5*uiZoom, 0x000000, 0.85);
       mbg.beginFill(0x0a0a18, 0.85);
       mbg.drawRoundedRect(bx, mby, bw, mbh, mbR);
       mbg.endFill();
@@ -2460,7 +2540,6 @@ function drawUI(now, pl) {
     if (tdmScore1.text !== s1) tdmScore1.text = s1;
     tdmScore0.style.fill = myTeam === 0 ? 0x4488ff : 0xff3333;
     tdmScore1.style.fill = myTeam === 1 ? 0x4488ff : 0xff3333;
-    const W = app.screen.width;
     tdmSep.x = W / 2;
     tdmScore0.x = W / 2 - tdmSep.width / 2;
     tdmScore1.x = W / 2 + tdmSep.width / 2;
