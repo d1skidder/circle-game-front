@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "https://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 const BASE_VIEW_WIDTH  = 4800;
@@ -448,6 +448,16 @@ function handleMessage(msg) {
 // ═══════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
   pressed[e.key] = true;
+  if (e.key === 'Escape' && document.getElementById('gameScreen').style.display === 'block') {
+    if (ws) { ws.close(); ws = null; }
+    myId = null; dead = false; killcount = 0;
+    players = {}; projectiles = {}; obstacles = {};
+    clearScene();
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('deathScreen').style.display = 'none';
+    document.getElementById('joinScreen').style.display = 'flex';
+    return;
+  }
   if (!myId || dead) return;
   if (e.key === 'q') sendAttack('skill1');
   if (e.key === 'e') sendAttack('skill2');
