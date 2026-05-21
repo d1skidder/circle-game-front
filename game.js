@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "wss://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "https://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 const BASE_VIEW_WIDTH  = 4800;
@@ -469,7 +469,7 @@ document.addEventListener('mousedown', e => {
     sendAttack('basicMelee');
 });
 document.addEventListener('wheel', e => {
-  zoom = e.deltaY > 0 ? Math.min(4.0, zoom + 0.05) : Math.max(getMinZoom(), zoom - 0.05);
+  zoom = e.deltaY > 0 ? Math.min(4.0, zoom + 0.03) : Math.max(getMinZoom(), zoom - 0.03);
 });
 window.addEventListener('resize', () => {
   const min = getMinZoom();
