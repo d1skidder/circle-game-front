@@ -459,7 +459,7 @@ function handleMessage(msg) {
 // ═══════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
   pressed[e.key] = true;
-  if (e.key === 'Escape' && document.getElementById('gameScreen').style.display === 'block') {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && document.getElementById('gameScreen').style.display === 'block') {
     if (ws) { ws.close(); ws = null; }
     myId = null; dead = false; killcount = 0;
     players = {}; projectiles = {}; obstacles = {};
