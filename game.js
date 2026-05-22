@@ -30,7 +30,7 @@ const pressed = {};
 let lastMoveSend = 0;
 // ── PIXI OBJECTS ─────────────────────────────────
 let app, mapContainer, uiContainer;
-let obstacleLayer, projLayer, aboveObstacleLayer, playerLayer, trailLayer, bushLayer, highPlayerLayer;
+let obstacleLayer, projLayer, aboveObstacleLayer, playerLayer, trailLayer, bushLayer, highPlayerLayer, damageTextLayer;
 let frenzyTrails = [];
 let lightningParticles = [];
 let mapBg = null;
@@ -178,11 +178,12 @@ function initPixi() {
   projLayer = new PIXI.Container();
   aboveObstacleLayer = new PIXI.Container();
   trailLayer = new PIXI.Container();
+  damageTextLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
   bushLayer = new PIXI.Container();
   highPlayerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(capturePointGraphic, projLayer, trailLayer, obstacleLayer, playerLayer, bushLayer, aboveObstacleLayer,highPlayerLayer);
+  mapContainer.addChild(capturePointGraphic, projLayer, trailLayer, obstacleLayer, damageTextLayer, playerLayer, bushLayer, aboveObstacleLayer,highPlayerLayer);
 
   generateTextures();
   initUI();
@@ -199,11 +200,12 @@ function clearScene() {
   projLayer = new PIXI.Container();
   aboveObstacleLayer = new PIXI.Container();
   trailLayer = new PIXI.Container();
+  damageTextLayer = new PIXI.Container();
   playerLayer = new PIXI.Container();
   bushLayer = new PIXI.Container();
   highPlayerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, playerLayer, bushLayer, highPlayerLayer, capturePointGraphic);
+  mapContainer.addChild(projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, damageTextLayer, playerLayer, bushLayer, highPlayerLayer, capturePointGraphic);
   playerContainers = {}; projContainers = {}; obstacleSprites = {}; npcContainers = {};
   frenzyTrails = [];
   lightningParticles = [];
@@ -526,7 +528,7 @@ function spawnDamageText(x, y, amount, isCrit = false) {
   text.anchor.set(0.5);
   text.x = x + (Math.random() - 0.5) * 20;
   text.y = y - 40;
-  mapContainer.addChild(text);
+  damageTextLayer.addChild(text);
   damageTexts.push({
     obj: text,
     vy: -(2.4 + Math.random() * 0.8),
@@ -555,7 +557,7 @@ function updateDamageTexts() {
 
     d.obj.alpha = d.life > 0.4 ? 1.0 : d.life / 0.4;
     if (d.life <= 0) {
-      mapContainer.removeChild(d.obj);
+      damageTextLayer.removeChild(d.obj);
       d.obj.destroy();
       damageTexts.splice(i, 1);
     }
@@ -862,8 +864,8 @@ function updatePlayerSprite(id, p, now) {
 
   const facing = p.renderDir ?? p.dir;
 
-  if (p.isHitting && (!p._swingStart || now - p._swingStart > 399)) {
-    p._swingStart = now;
+  if (p.isHitting && (!p._swingStart || now - p._swingStart > p.basicMeleeMaxCD * 100 - 1)) {
+p._swingStart = now;
   }
   const elapsed = now - p._swingStart;
   if (p._swingStart) {
@@ -873,7 +875,6 @@ function updatePlayerSprite(id, p, now) {
       p._swingAngle = ((400 - elapsed) / 200) * Math.PI * 0.9;
     } else {
       p._swingAngle = 0;
-      p._swingStart = null;
     }
   } else {
     p._swingAngle = 0;
@@ -1142,6 +1143,11 @@ function buildNPCContainer(type, radius, name) {
   //const def = new PIXI.Graphics(); def.name = 'defHitbox'; def.beginFill(0x8888ff, 0.9); def.drawCircle(0, 0, radius); def.endFill(); c.addChild(def);
   const hbg = new PIXI.Graphics(); hbg.name = 'hbg'; c.addChild(hbg);
   const hfill = new PIXI.Graphics(); hfill.name = 'hfill'; c.addChild(hfill);
+  if (name === 'trainingdummy') {
+    const dbgBg = new PIXI.Graphics(); dbgBg.name = 'debugBg'; c.addChild(dbgBg);
+    const dbgText = new PIXI.Text('', { fontFamily: 'monospace', fontSize: 11, fill: 0xffffff, align: 'left' });
+    dbgText.name = 'debugText'; c.addChild(dbgText);
+  }
   return c;
 }
 
@@ -1156,6 +1162,25 @@ function updateNPCSprite(id, npc, now) {
     const rot = npc.renderDir - Math.PI / 2;
     if (lavabugSpr) lavabugSpr.rotation = rot;
     if (lavabugOutline) lavabugOutline.rotation = rot;
+  }
+
+  const dbgBg = c.getChildByName('debugBg');
+  const dbgText = c.getChildByName('debugText');
+  if (dbgBg && dbgText) {
+    const maxHp = npc.maxHealth ?? 100;
+    const dmg = Math.round(maxHp - (npc.health ?? maxHp));
+    dbgText.text = `dmg: ${dmg}\nstun_time: ${(npc.stun_time ?? 0).toFixed(2)}\nslow: ${npc.slow ?? 0}\nslow_time: ${(npc.slow_time ?? 0).toFixed(2)}`;
+    const pad = 4;
+    const bw = dbgText.width + pad * 2;
+    const bh = dbgText.height + pad * 2;
+    const bx = -bw / 2;
+    const by = -(npc.radius + bh + 6);
+    dbgBg.clear();
+    dbgBg.beginFill(0x000000, 0.85);
+    dbgBg.drawRect(bx, by, bw, bh);
+    dbgBg.endFill();
+    dbgText.x = bx + pad;
+    dbgText.y = by + pad;
   }
 
   const hbg = c.getChildByName('hbg');
