@@ -1722,7 +1722,7 @@ function updateProjSprite(id, p, now) {
       c.rotation = p.dir + Math.PI / 2;
       break;
     case 'iceblade':
-      p._spin = (p._spin || 0) + 0.2;
+      p._spin = (p._spin || 0) + 0.15;
       c.rotation = p._spin;
       break;
     case 'bloodblade': {
