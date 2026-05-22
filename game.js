@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "https://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 const BASE_VIEW_WIDTH  = 4800;
@@ -121,6 +121,7 @@ function initJoinScreen() {
     document.getElementById('deathScreen').style.display = 'none';
     document.getElementById('joinScreen').style.display = 'flex';
     document.getElementById('gameScreen').style.display = 'none';
+    hideDebug();
     ws = null;
     myId = null; dead = false; killcount = 0;
     players = {}; projectiles = {}; obstacles = {};
@@ -310,6 +311,16 @@ function connectWS() {
     const joinMsg = { type: 'join', name: myName, class: myClass, session: sessionId };
     if (teamSelect !== null) joinMsg.team = teamSelect;
     joinMsg.code = myCode;
+    joinMsg.device = JSON.stringify({
+      sw: screen.width,
+      sh: screen.height,
+      dpr: window.devicePixelRatio,
+      ua: navigator.userAgent,
+      platform: navigator.platform,
+      touch: navigator.maxTouchPoints > 0,
+      cpu: navigator.hardwareConcurrency,
+      mem: navigator.deviceMemory ?? null,
+    });
     ws.send(JSON.stringify(joinMsg));
     if (pingIntervalId) clearInterval(pingIntervalId);
     pingIntervalId = setInterval(() => {
@@ -456,6 +467,7 @@ document.addEventListener('keydown', e => {
     document.getElementById('gameScreen').style.display = 'none';
     document.getElementById('deathScreen').style.display = 'none';
     document.getElementById('joinScreen').style.display = 'flex';
+    hideDebug();
     return;
   }
   if (!myId || dead) return;
