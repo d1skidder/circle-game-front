@@ -235,7 +235,7 @@ function generateTextures() {
   texCache.crusadeWing = PIXI.Texture.from('assets/CrusadeWingClean.png');
   texCache.holySword = PIXI.Texture.from('assets/holy_sword.webp');
   texCache.earthWave = PIXI.Texture.from('assets/earth_wave.webp');
-  texCache.iceSword      = PIXI.Texture.from('assets/iceblade.png');
+  texCache.iceSword      = PIXI.Texture.from('assets/iceblade.webp');
   texCache.rock          = makeRockTexture();
   texCache.bush          = PIXI.Texture.from('assets/bush.webp');
   texCache.rockfist      = PIXI.Texture.from('assets/rockfist.webp');
@@ -1351,9 +1351,12 @@ function buildProjContainer(type, radius) {
       aura2.beginFill(0x44aaff,0.3);aura2.drawCircle(0,0,r);aura2.endFill();
       const ring=new PIXI.Graphics();
       ring.lineStyle(1.5,0x88ddff,0.3);ring.drawCircle(0,0,r);
-      const blade=new PIXI.Sprite(texCache.iceSword);
-      blade.anchor.set(0.5);blade.width=r*3.8;blade.height=r*3.8;
-      proj.addChild(aura2,ring,blade); break;
+      const tex=texCache.iceSword;
+      const sx=(r*2.118*1.5)/tex.width, sy=(r*1.572*1.5)/tex.height;
+      const bladeOutline=buildSpriteOutline(tex,sx,sy,0,0x2266aa,2);
+      const blade=new PIXI.Sprite(tex);
+      blade.anchor.set(0.5);blade.width=r*2.118*1.5;blade.height=r*1.572*1.5;
+      proj.addChild(aura2,ring,bladeOutline,blade); break;
     }
     case 'snowstorm': {
       const bg2=new PIXI.Graphics();
@@ -1719,7 +1722,7 @@ function updateProjSprite(id, p, now) {
       c.rotation = p.dir + Math.PI / 2;
       break;
     case 'iceblade':
-      p._spin = (p._spin || 0) + 0.15;
+      p._spin = (p._spin || 0) + 0.2;
       c.rotation = p._spin;
       break;
     case 'bloodblade': {
