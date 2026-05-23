@@ -1181,7 +1181,7 @@ function updateNPCSprite(id, npc, now) {
     const bx = -bw / 2;
     const by = -(npc.radius + bh + 6);
     dbgBg.clear();
-    dbgBg.beginFill(0x000000, 0.85);
+    dbgBg.beginFill(0x000000, 0.45);
     dbgBg.drawRect(bx, by, bw, bh);
     dbgBg.endFill();
     dbgText.x = bx + pad;
