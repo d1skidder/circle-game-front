@@ -477,6 +477,7 @@ document.addEventListener('keydown', e => {
   if (key === 'q') sendAttack('skill1');
   if (key === 'e') sendAttack('skill2');
   if (key === 'f') sendAttack('skill3');
+  if (key === 't' && ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'switchMode' }));
 });
 document.addEventListener('keyup', e => {
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -1173,7 +1174,7 @@ function updateNPCSprite(id, npc, now) {
   if (dbgBg && dbgText) {
     const maxHp = npc.maxHealth ?? 100;
     const dmg = Math.round(maxHp - (npc.health ?? maxHp));
-    dbgText.text = `dmg: ${dmg}\nstun_time: ${(npc.stun_time ?? 0).toFixed(2)}\nslow: ${npc.slow ?? 0}\nslow_time: ${(npc.slow_time ?? 0).toFixed(2)}`;
+    dbgText.text = `dmg: ${dmg}\nstun_time: ${(npc.stun_time ?? 0).toFixed(2)}\nslow: ${npc.slow ?? 0}\nslow_time: ${(npc.slow_time ?? 0).toFixed(2)}\nmode: ${npc.mode ?? '—'}`;
     const pad = 4;
     const bw = dbgText.width + pad * 2;
     const bh = dbgText.height + pad * 2;
