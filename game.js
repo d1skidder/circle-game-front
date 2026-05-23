@@ -460,7 +460,8 @@ function handleMessage(msg) {
 //  INPUT
 // ═══════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
-  pressed[e.key] = true;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  pressed[key] = true;
   if ((e.key === 'Delete' || e.key === 'Backspace') && document.getElementById('gameScreen').style.display === 'block') {
     if (ws) { ws.close(); ws = null; }
     myId = null; dead = false; killcount = 0;
@@ -473,11 +474,14 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (!myId || dead) return;
-  if (e.key === 'q') sendAttack('skill1');
-  if (e.key === 'e') sendAttack('skill2');
-  if (e.key === 'f') sendAttack('skill3');
+  if (key === 'q') sendAttack('skill1');
+  if (key === 'e') sendAttack('skill2');
+  if (key === 'f') sendAttack('skill3');
 });
-document.addEventListener('keyup', e => { pressed[e.key] = false; });
+document.addEventListener('keyup', e => {
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  pressed[key] = false;
+});
 document.addEventListener('mousemove', e => {
   if (!app) return;
   const pl = players[myId];
