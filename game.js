@@ -479,7 +479,8 @@ function addChatMessage(sender, text, playerClass) {
 
   let senderT = null;
   if (sender) {
-    const nameColor = CLASS_STYLES[playerClass] ? CLASS_STYLES[playerClass].body : 0xffffff;
+    const CHAT_COLOR_OVERRIDE = { void: 0x9b6dcc };
+    const nameColor = CHAT_COLOR_OVERRIDE[playerClass] ?? (CLASS_STYLES[playerClass] ? CLASS_STYLES[playerClass].body : 0xffffff);
     senderT = new PIXI.Text(sender + ':', {
       fontSize: 12, fontFamily: 'monospace', fontWeight: '700', fill: nameColor, ...shadowStyle,
     });
