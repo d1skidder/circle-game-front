@@ -48,6 +48,10 @@ let team0score = 0, team1score = 0;
 // ── DAMAGE TEXT STATE ─────────────────────────────
 let damageTexts = [];
 
+// ── CHAT STATE ────────────────────────────────────
+let chatContainer = null;
+const chatLines = [];
+
 function lerp(a, b, t) { return a + (b - a) * t; }
 function lerpAngle(a, b, t) {
   let c = b - a;
@@ -93,6 +97,7 @@ function initJoinScreen() {
     if (!myName || !myClass) return;
     document.getElementById('joinScreen').style.display = 'none';
     document.getElementById('gameScreen').style.display = 'block';
+    document.getElementById('chatBox').style.display = 'flex';
     gameStartTime = Date.now();
     dead = false; killcount = 0;
     players = {}; projectiles = {}; obstacles = {};
@@ -109,6 +114,7 @@ function initJoinScreen() {
     myCode = 'spectator';
     document.getElementById('joinScreen').style.display = 'none';
     document.getElementById('gameScreen').style.display = 'block';
+    document.getElementById('chatBox').style.display = 'flex';
     gameStartTime = Date.now();
     dead = false; killcount = 0;
     players = {}; projectiles = {}; obstacles = {};
@@ -121,6 +127,7 @@ function initJoinScreen() {
     document.getElementById('deathScreen').style.display = 'none';
     document.getElementById('joinScreen').style.display = 'flex';
     document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('chatBox').style.display = 'none';
     hideDebug();
     ws = null;
     myId = null; dead = false; killcount = 0;
@@ -224,6 +231,8 @@ function clearScene() {
     uiMmDots[id].destroy();
     delete uiMmDots[id];
   }
+  if (chatContainer) { chatContainer.removeChildren().forEach(lc => lc.destroy({ children: true })); }
+  chatLines.length = 0;
 }
 
 // ═══════════════════════════════════════════════════
@@ -454,6 +463,63 @@ function handleMessage(msg) {
     team0score = msg.team0score;
     team1score = msg.team1score;
   }
+
+  if (msg.type === 'chatMessage') {
+    addChatMessage(msg.sender, msg.message, msg.class);
+  }
+}
+
+function addChatMessage(sender, text, playerClass) {
+  if (!chatContainer || !app) return;
+
+  const W = app.screen.width, H = app.screen.height;
+  const chatW = 300, padX = 8, padY = 3, margin = 16, bottomOffset = 60;
+
+  const shadowStyle = { dropShadow: true, dropShadowDistance: 1, dropShadowAlpha: 0.9 };
+
+  let senderT = null;
+  if (sender) {
+    const nameColor = CLASS_STYLES[playerClass] ? CLASS_STYLES[playerClass].body : 0xffffff;
+    senderT = new PIXI.Text(sender + ':', {
+      fontSize: 12, fontFamily: 'monospace', fontWeight: '700', fill: nameColor, ...shadowStyle,
+    });
+  }
+
+  const senderW = senderT ? senderT.width + 4 : 0;
+  const msgT = new PIXI.Text(text, {
+    fontSize: 12, fontFamily: 'monospace', fill: 0xdddddd,
+    wordWrap: true, wordWrapWidth: chatW - padX * 2 - senderW, ...shadowStyle,
+  });
+
+  const lineH = Math.max(senderT ? senderT.height : 0, msgT.height) + padY * 2;
+
+  const bg = new PIXI.Graphics();
+  bg.beginFill(0x000000, 0.55);
+  bg.lineStyle(1, 0xffffff, 0.08);
+  bg.drawRoundedRect(0, 0, chatW, lineH, 4);
+  bg.endFill();
+
+  const lc = new PIXI.Container();
+  lc.addChild(bg);
+  if (senderT) { senderT.x = padX; senderT.y = padY; lc.addChild(senderT); }
+  msgT.x = padX + senderW; msgT.y = padY;
+  lc.addChild(msgT);
+
+  chatContainer.addChild(lc);
+  chatLines.push(lc);
+
+  while (chatLines.length > 10) {
+    const old = chatLines.shift();
+    chatContainer.removeChild(old);
+    old.destroy({ children: true });
+  }
+
+  let y = H - bottomOffset;
+  for (let i = chatLines.length - 1; i >= 0; i--) {
+    y -= chatLines[i].height + 2;
+    chatLines[i].x = W - chatW - margin;
+    chatLines[i].y = y;
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -461,6 +527,27 @@ function handleMessage(msg) {
 // ═══════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const chatInput = document.getElementById('chatInput');
+  const isChatOpen = document.activeElement === chatInput;
+
+  if (isChatOpen) {
+    if (e.key === 'Enter') {
+      const text = chatInput.value.trim();
+      if (text && ws && ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ type: 'chatMessage', message: text }));
+      chatInput.value = '';
+      chatInput.style.display = 'none';
+      chatInput.blur();
+      if (chatContainer) chatContainer.alpha = 0.5;
+    } else if (e.key === 'Escape') {
+      chatInput.value = '';
+      chatInput.style.display = 'none';
+      chatInput.blur();
+      if (chatContainer) chatContainer.alpha = 0.5;
+    }
+    return;
+  }
+
   pressed[key] = true;
   if ((e.key === 'Delete' || e.key === 'Backspace') && document.getElementById('gameScreen').style.display === 'block') {
     if (ws) { ws.close(); ws = null; }
@@ -470,7 +557,15 @@ document.addEventListener('keydown', e => {
     document.getElementById('gameScreen').style.display = 'none';
     document.getElementById('deathScreen').style.display = 'none';
     document.getElementById('joinScreen').style.display = 'flex';
+    document.getElementById('chatBox').style.display = 'none';
     hideDebug();
+    return;
+  }
+  if (e.key === 'Enter' && myId && document.getElementById('gameScreen').style.display === 'block') {
+    chatInput.style.display = 'block';
+    chatInput.focus();
+    if (chatContainer) chatContainer.alpha = 1;
+    e.preventDefault();
     return;
   }
   if (!myId || dead) return;
@@ -2291,6 +2386,10 @@ function initUI() {
     cpBg, cpFill, cpText, cpBarW, cpBarH, cpBarX, cpBarY, mmCpDiamond, mmViewRect,
     tdmScore0, tdmSep, tdmScore1, cpScore0, cpScore1,
     hpStatText, manaStatText };
+
+  chatContainer = new PIXI.Container();
+  chatContainer.alpha = 0.5;
+  uiContainer.addChild(chatContainer);
 }
 
 const uiPlayerUI = {};

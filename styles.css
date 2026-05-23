@@ -116,6 +116,21 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0614; }
 .debug-line.error { color: #ff4455; border-color: rgba(255,68,85,0.3); }
 .debug-line.info  { color: #88aaff; border-color: rgba(136,170,255,0.3); }
 
+/* ── CHAT BOX ── */
+#chatBox {
+  position: fixed; bottom: 16px; right: 16px; z-index: 150;
+  width: 300px; display: none; flex-direction: column; gap: 4px;
+  pointer-events: none;
+}
+#chatInputRow { pointer-events: auto; }
+#chatInput {
+  width: 100%; padding: 6px 10px; font-size: 13px;
+  border-radius: 6px; border: 1px solid rgba(200,170,255,0.35);
+  background: rgba(0,0,0,0.72); color: #eee;
+  font-family: monospace; outline: none; display: none;
+}
+#chatInput:focus { border-color: #9b6dff; }
+
 /* ── DEATH SCREEN ── */
 #deathScreen {
   position: fixed; inset: 0; z-index: 200; display: none;
