@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "https://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 const BASE_VIEW_WIDTH  = 4800;
@@ -107,8 +107,10 @@ function initJoinScreen() {
   });
 
   document.getElementById('spectate-btn').addEventListener('click', () => {
-    myName = 'spectator';
-    myClass = "fire"; // class doesn't matter for spectators, but set to something valid to avoid issues
+    const spectatorName = document.getElementById('name-input').value.trim();
+    if (!spectatorName) return;
+    myName = spectatorName;
+    myClass = "fire";
     sessionId = parseInt(document.getElementById('session-select').value, 10);
     teamSelect = null;
     myCode = 'spectator';
@@ -465,11 +467,11 @@ function handleMessage(msg) {
   }
 
   if (msg.type === 'chatMessage') {
-    addChatMessage(msg.sender, msg.message, msg.class);
+    addChatMessage(msg.sender, msg.message, msg.class, msg.fromSpectator);
   }
 }
 
-function addChatMessage(sender, text, playerClass) {
+function addChatMessage(sender, text, playerClass, fromSpectator) {
   if (!chatContainer || !app) return;
 
   const W = app.screen.width, H = app.screen.height;
@@ -480,15 +482,16 @@ function addChatMessage(sender, text, playerClass) {
   let senderT = null;
   if (sender) {
     const CHAT_COLOR_OVERRIDE = { void: 0x9b6dcc };
-    const nameColor = CHAT_COLOR_OVERRIDE[playerClass] ?? (CLASS_STYLES[playerClass] ? CLASS_STYLES[playerClass].body : 0xffffff);
-    senderT = new PIXI.Text(sender + ':', {
+    const nameColor = fromSpectator ? 0xaaaaaa : (CHAT_COLOR_OVERRIDE[playerClass] ?? (CLASS_STYLES[playerClass] ? CLASS_STYLES[playerClass].body : 0xffffff));
+    const label = fromSpectator ? `[spectator] ${sender}:` : `${sender}:`;
+    senderT = new PIXI.Text(label, {
       fontSize: 12, fontFamily: 'monospace', fontWeight: '700', fill: nameColor, ...shadowStyle,
     });
   }
 
   const senderW = senderT ? senderT.width + 4 : 0;
   const msgT = new PIXI.Text(text, {
-    fontSize: 12, fontFamily: 'monospace', fill: 0xdddddd,
+    fontSize: 12, fontFamily: 'monospace', fill: fromSpectator ? 0xaaaaaa : 0xdddddd,
     wordWrap: true, wordWrapWidth: chatW - padX * 2 - senderW, ...shadowStyle,
   });
 
