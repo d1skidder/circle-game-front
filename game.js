@@ -233,6 +233,11 @@ function clearScene() {
     uiMmDots[id].destroy();
     delete uiMmDots[id];
   }
+  for (const id of Object.keys(uiMmNpcDots)) {
+    uiContainer.removeChild(uiMmNpcDots[id]);
+    uiMmNpcDots[id].destroy();
+    delete uiMmNpcDots[id];
+  }
   if (chatContainer) { chatContainer.removeChildren().forEach(lc => lc.destroy({ children: true })); }
   chatLines.length = 0;
 }
@@ -241,11 +246,11 @@ function clearScene() {
 //  TEXTURE GENERATION
 // ═══════════════════════════════════════════════════
 function generateTextures() {
-  texCache.sword         = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/swordSprite.png');
+  texCache.sword         = PIXI.Texture.from('assets/swordSprite.png');
   texCache.enhancedSword = PIXI.Texture.from('assets/stone_club.webp');
-  texCache.voidOuter  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidOuterRingClean.png');
-  texCache.voidMiddle = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidMiddleRingClean.png');
-  texCache.voidInner  = PIXI.Texture.from('https://d1skidder.github.io/circle-game-front/assets/voidInnerRingClean.png');
+  texCache.voidOuter  = PIXI.Texture.from('assets/voidOuterRingClean.png');
+  texCache.voidMiddle = PIXI.Texture.from('assets/voidMiddleRingClean.png');
+  texCache.voidInner  = PIXI.Texture.from('assets/voidInnerRingClean.png');
   texCache.crusadeWing = PIXI.Texture.from('assets/CrusadeWingClean.png');
   texCache.holySword = PIXI.Texture.from('assets/holy_sword.webp');
   texCache.earthWave = PIXI.Texture.from('assets/earth_wave.webp');
@@ -530,6 +535,7 @@ function addChatMessage(sender, text, playerClass, fromSpectator) {
 //  INPUT
 // ═══════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
+  if (!e.key) return;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const chatInput = document.getElementById('chatInput');
   const isChatOpen = document.activeElement === chatInput;
@@ -579,6 +585,7 @@ document.addEventListener('keydown', e => {
   if (key === 't' && ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'switchMode' }));
 });
 document.addEventListener('keyup', e => {
+  if (!e.key) return;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   pressed[key] = false;
 });
@@ -1234,6 +1241,7 @@ function buildNPCContainer(type, radius, name) {
       sh.tint = 0x000000; sh.x = ox; sh.y = oy;
       outline.addChild(sh);
     }
+    const rangeCircle = new PIXI.Graphics(); rangeCircle.name = 'rangeCircle'; c.addChild(rangeCircle);
     c.addChild(outline);
     const spr = new PIXI.Sprite(texCache.lavabug);
     spr.anchor.set(0.5);
@@ -1266,6 +1274,14 @@ function updateNPCSprite(id, npc, now) {
     const rot = npc.renderDir - Math.PI / 2;
     if (lavabugSpr) lavabugSpr.rotation = rot;
     if (lavabugOutline) lavabugOutline.rotation = rot;
+  }
+
+  const rangeCircle = c.getChildByName('rangeCircle');
+  if (rangeCircle) {
+    rangeCircle.clear();
+    rangeCircle.beginFill(0xff0000, 0.1);
+    rangeCircle.drawCircle(0, 0, npc.targeting_range);
+    rangeCircle.endFill();
   }
 
   const dbgBg = c.getChildByName('debugBg');
@@ -2431,6 +2447,7 @@ function removePlayerUI(id) {
 }
 
 const uiMmDots = {};
+const uiMmNpcDots = {};
 
 function drawUI(now, pl) {
   if (!_ui) return;
@@ -2563,6 +2580,27 @@ function drawUI(now, pl) {
       const outlineColor = isEnemy ? 0xff3333 : isAlly ? 0x44aaff : 0xff3333;
       dot.lineStyle(1.5, outlineColor, 1); dot.drawCircle(mmCx, mmCy, 4);
     }
+  }
+
+  for (const id of Object.keys(uiMmNpcDots)) {
+    if (!npcs[id]) { uiContainer.removeChild(uiMmNpcDots[id]); uiMmNpcDots[id].destroy(); delete uiMmNpcDots[id]; }
+  }
+  for (const [id, npc] of Object.entries(npcs)) {
+    if (npc.name !== 'lavabug') continue;
+    if (!uiMmNpcDots[id]) {
+      const g = new PIXI.Graphics();
+      uiContainer.addChild(g);
+      uiMmNpcDots[id] = g;
+    }
+    const g = uiMmNpcDots[id];
+    const dx = mmX + npc.renderX * mmScale;
+    const dy = mmY + npc.renderY * mmScale;
+    const r = 5;
+    g.clear();
+    g.beginFill(0xff0000, 1);
+    g.moveTo(dx, dy - r); g.lineTo(dx + r, dy);
+    g.lineTo(dx, dy + r); g.lineTo(dx - r, dy);
+    g.closePath(); g.endFill();
   }
 
   mmCpDiamond.clear();
