@@ -16,7 +16,8 @@ const CLASS_STYLES = {
   blood:     { body: 0xaa1122, bodyHi: 0xff3355, arm: 0x880011, outline: 0x440008 },
   lightning: { body: 0xffee22, bodyHi: 0xffff99, arm: 0xddcc00, outline: 0x886600 },
   void:      { body: 0x48315c, bodyHi: 0x7f6890, arm: 0x3a2e48, outline: 0x1a1220 },
-  crusader:  { body: 0xffffff, bodyHi: 0xeeeeee, arm: 0xcccccc, outline: 0x444444 },
+  crusader:    { body: 0xffffff, bodyHi: 0xeeeeee, arm: 0xcccccc, outline: 0x444444 },
+  blademaster: { body: 0xcccccc, bodyHi: 0xe8e8e8, arm: 0xaaaaaa, outline: 0x555555 },
 };
 
 // ── STATE ────────────────────────────────────────
@@ -482,25 +483,24 @@ function addChatMessage(sender, text, playerClass, fromSpectator) {
   const W = app.screen.width, H = app.screen.height;
   const chatW = 300, padX = 8, padY = 3, margin = 16, bottomOffset = 60;
 
-  const shadowStyle = { dropShadow: true, dropShadowDistance: 1, dropShadowAlpha: 0.9 };
+  const CHAT_COLOR_OVERRIDE = { void: 0x9b6dcc };
+  const nameColorNum = fromSpectator ? 0xaaaaaa : (CHAT_COLOR_OVERRIDE[playerClass] ?? (CLASS_STYLES[playerClass] ? CLASS_STYLES[playerClass].body : 0xffffff));
+  const nameColorHex = '#' + nameColorNum.toString(16).padStart(6, '0');
+  const msgColorHex = fromSpectator ? '#aaaaaa' : '#dddddd';
 
-  let senderT = null;
-  if (sender) {
-    const CHAT_COLOR_OVERRIDE = { void: 0x9b6dcc };
-    const nameColor = fromSpectator ? 0xaaaaaa : (CHAT_COLOR_OVERRIDE[playerClass] ?? (CLASS_STYLES[playerClass] ? CLASS_STYLES[playerClass].body : 0xffffff));
-    const label = fromSpectator ? `[spectator] ${sender}:` : `${sender}:`;
-    senderT = new PIXI.Text(label, {
-      fontSize: 12, fontFamily: 'monospace', fontWeight: '700', fill: nameColor, ...shadowStyle,
-    });
-  }
+  const classTag = fromSpectator ? '[spectator]' : (playerClass ? `[${playerClass}]` : '');
+  const label = sender ? `${classTag} ${sender}: ` : '';
+  const htmlContent = sender
+    ? `<span style="color:${nameColorHex};font-weight:700;">${label}</span><span style="color:${msgColorHex};">${text}</span>`
+    : `<span style="color:${msgColorHex};">${text}</span>`;
 
-  const senderW = senderT ? senderT.width + 4 : 0;
-  const msgT = new PIXI.Text(text, {
-    fontSize: 12, fontFamily: 'monospace', fill: fromSpectator ? 0xaaaaaa : 0xdddddd,
-    wordWrap: true, wordWrapWidth: chatW - padX * 2 - senderW, ...shadowStyle,
+  const msgT = new PIXI.HTMLText(htmlContent, {
+    fontSize: 12, fontFamily: 'monospace',
+    wordWrap: true, wordWrapWidth: chatW - padX * 2,
+    dropShadow: true, dropShadowDistance: 1, dropShadowAlpha: 0.9,
   });
 
-  const lineH = Math.max(senderT ? senderT.height : 0, msgT.height) + padY * 2;
+  const lineH = msgT.height + padY * 2;
 
   const bg = new PIXI.Graphics();
   bg.beginFill(0x000000, 0.55);
@@ -510,8 +510,7 @@ function addChatMessage(sender, text, playerClass, fromSpectator) {
 
   const lc = new PIXI.Container();
   lc.addChild(bg);
-  if (senderT) { senderT.x = padX; senderT.y = padY; lc.addChild(senderT); }
-  msgT.x = padX + senderW; msgT.y = padY;
+  msgT.x = padX; msgT.y = padY;
   lc.addChild(msgT);
 
   chatContainer.addChild(lc);
@@ -1289,7 +1288,7 @@ function updateNPCSprite(id, npc, now) {
   if (dbgBg && dbgText) {
     const maxHp = npc.maxHealth ?? 100;
     const dmg = Math.round(maxHp - (npc.health ?? maxHp));
-    dbgText.text = `dmg: ${dmg}\nstun_time: ${(npc.stun_time ?? 0).toFixed(2)}\nslow: ${npc.slow ?? 0}\nslow_time: ${(npc.slow_time ?? 0).toFixed(2)}\nmode: ${npc.mode ?? '—'}`;
+    dbgText.text = `dmg: ${dmg}\nstun_time: ${(npc.stun_time ?? 0).toFixed(2)}\nslow: ${npc.slow ?? 0}\nslow_time: ${(npc.slow_time ?? 0).toFixed(2)}\nbleed: ${npc.bleed ?? 0}\nmode: ${npc.mode ?? '—'}`;
     const pad = 4;
     const bw = dbgText.width + pad * 2;
     const bh = dbgText.height + pad * 2;
