@@ -835,22 +835,25 @@ function buildPlayerContainer(c, gameClass) {
   const aura = new PIXI.Graphics(); aura.name = 'aura'; c.addChild(aura);
 
   // Sword outline container (8 tinted shadows behind the real sprite)
+  const swordScaleX = gameClass === 'blademaster' ? 0.135 : 0.09;
+  const swordScaleY = gameClass === 'blademaster' ? 0.165 : 0.11;
   const swordOutline = buildSpriteOutline(
     texCache.sword,
-    0.09, 0.11,
+    swordScaleX, swordScaleY,
     -Math.PI / 2,
     0x000000,
     1.5
   );
-  swordOutline.x = 30; swordOutline.y = -30;
+  const swordY = gameClass === 'blademaster' ? -45 : -30;
+  swordOutline.x = 30; swordOutline.y = swordY;
   swordOutline.name = 'swordOutline';
   c.addChild(swordOutline);
 
   // Sword sprite — on top of outline
   const sword = new PIXI.Sprite(texCache.sword);
   sword.anchor.set(0.5, 0.5);
-  sword.x = 30; sword.y = -30;
-  sword.scale.set(0.09, 0.11);
+  sword.x = 30; sword.y = swordY;
+  sword.scale.set(swordScaleX, swordScaleY);
   sword.rotation = -Math.PI / 2;
   sword.name = 'sword';
   c.addChild(sword);
@@ -1181,7 +1184,7 @@ p._swingStart = now;
     if (p.basicEnhanced) {
       sword.x = 20; sword.y = -40;
     } else {
-      sword.x = 30; sword.y = -30;
+      sword.x = 30; sword.y = p.gameClass === 'blademaster' ? -45 : -30;
     }
     if (swordOutline) {
       swordOutline.x = sword.x; swordOutline.y = sword.y;
