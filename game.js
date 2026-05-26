@@ -330,16 +330,34 @@ function connectWS() {
     const joinMsg = { type: 'join', name: myName, class: myClass, session: sessionId };
     if (teamSelect !== null) joinMsg.team = teamSelect;
     joinMsg.code = myCode;
+    const _gl = document.createElement('canvas').getContext('webgl');
+    const _glExt = _gl?.getExtension('WEBGL_debug_renderer_info');
+    const _c = document.createElement('canvas');
+    const _ctx = _c.getContext('2d');
+    _ctx.fillText('fp', 10, 10);
+    const _ac = new AudioContext();
     joinMsg.device = JSON.stringify({
       sw: screen.width,
       sh: screen.height,
       dpr: window.devicePixelRatio,
+      colorDepth: screen.colorDepth,
       ua: navigator.userAgent,
       platform: navigator.platform,
+      lang: navigator.language,
+      langs: navigator.languages?.join(',') ?? null,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
       touch: navigator.maxTouchPoints > 0,
       cpu: navigator.hardwareConcurrency,
       mem: navigator.deviceMemory ?? null,
+      cookieEnabled: navigator.cookieEnabled,
+      online: navigator.onLine,
+      connType: navigator.connection?.effectiveType ?? null,
+      webglVendor: _glExt ? _gl.getParameter(_glExt.UNMASKED_VENDOR_WEBGL) : null,
+      webglRenderer: _glExt ? _gl.getParameter(_glExt.UNMASKED_RENDERER_WEBGL) : null,
+      canvasFp: _c.toDataURL(),
+      audioSR: _ac.sampleRate,
     });
+    _ac.close();
     ws.send(JSON.stringify(joinMsg));
     if (pingIntervalId) clearInterval(pingIntervalId);
     pingIntervalId = setInterval(() => {
