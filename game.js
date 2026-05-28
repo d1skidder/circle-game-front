@@ -791,7 +791,7 @@ function gameLoop() {
     p.renderX = lerp(p.last_x ?? p.x, p.x, t);
     p.renderY = lerp(p.last_y ?? p.y, p.y, t);
     p.renderHealth = lerp(p.renderHealth ?? p.health, p.health, 0.12);
-    p.renderDir = lerpAngle(p.renderDir ?? p.dir, p.dir, 0.18);
+    p.renderDir = lerpAngle(p.last_dir ?? p.dir, p.dir, t);
   }
 
   const effectiveZoom = Math.max(zoom, getMinZoom());
