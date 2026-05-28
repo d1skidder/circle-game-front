@@ -17,6 +17,7 @@ const CLASS_STYLES = {
   lightning: { body: 0xffee22, bodyHi: 0xffff99, arm: 0xddcc00, outline: 0x886600 },
   void:      { body: 0x48315c, bodyHi: 0x7f6890, arm: 0x3a2e48, outline: 0x1a1220 },
   crusader:    { body: 0xffffff, bodyHi: 0xeeeeee, arm: 0xcccccc, outline: 0x444444 },
+  priest:      { body: 0xffffff, bodyHi: 0xeeeeee, arm: 0xffffff, outline: 0x444444 },
   blademaster: { body: 0xcccccc, bodyHi: 0xe8e8e8, arm: 0xaaaaaa, outline: 0x555555 },
 };
 
@@ -909,6 +910,19 @@ function buildPlayerContainer(c, gameClass) {
     cross.name = 'cross'; c.addChild(cross);
   }
 
+  // Priest cross (gold)
+  if (gameClass === 'priest') {
+    const cross = new PIXI.Graphics();
+    cross.beginFill(0xffd700, 1);
+    cross.drawRect(-6, -9, 6, 18);   // vertical bar
+    cross.drawRect(-12, -3, 24, 6);   // horizontal bar
+    cross.endFill();
+    cross.name = 'cross'; c.addChild(cross);
+  }
+
+  // Holy protection shield
+  const holyShield = new PIXI.Graphics(); holyShield.name = 'holyShield'; c.addChild(holyShield);
+
   // Armor overlay
   const armor = new PIXI.Graphics(); armor.name = 'armor'; c.addChild(armor);
 
@@ -1096,6 +1110,26 @@ p._swingStart = now;
           trailLayer.addChild(spark);
           lightningParticles.push({ g: spark, born: now });
         }
+      }
+    }
+  }
+
+  // ── HOLY PROTECTION SHIELD ──
+  const holyShield = c.getChildByName('holyShield');
+  if (holyShield) {
+    holyShield.clear();
+    if (p.hasHolyProtection) {
+      const t3 = now / 800;
+      holyShield.lineStyle(3, 0xffd700, 0.9); holyShield.drawCircle(0, 0, 28);
+      holyShield.lineStyle(1.5, 0xffe066, 0.5); holyShield.drawCircle(0, 0, 33);
+      for (let i = 0; i < 8; i++) {
+        const ang = t3 + i * Math.PI / 4;
+        holyShield.lineStyle(0); holyShield.beginFill(0xffd700, 0.20);
+        holyShield.moveTo(Math.cos(ang) * 22, Math.sin(ang) * 22);
+        holyShield.lineTo(Math.cos(ang + 0.3) * 32, Math.sin(ang + 0.3) * 32);
+        holyShield.lineTo(Math.cos(ang + 0.45) * 32, Math.sin(ang + 0.45) * 32);
+        holyShield.lineTo(Math.cos(ang + 0.15) * 22, Math.sin(ang + 0.15) * 22);
+        holyShield.closePath(); holyShield.endFill();
       }
     }
   }
