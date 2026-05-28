@@ -20,6 +20,44 @@ const CLASS_STYLES = {
   blademaster: { body: 0xcccccc, bodyHi: 0xe8e8e8, arm: 0xaaaaaa, outline: 0x555555 },
 };
 
+const ABILITY_RANGES = {
+  fire: [
+    { key: 'Q', range: 1320, color: '#ff7a38' },
+    { key: 'E', range: 1350, color: '#ffb144' },
+    { key: 'F', range: 320, color: '#ff4f3f' }
+  ],
+  ice: [
+    { key: 'Q', range: 1040, color: '#9ee8ff' },
+    { key: 'E', range: 500, color: '#62c8ff' },
+    { key: 'F', range: 350, color: '#d7f8ff' }
+  ],
+  earth: [
+    { key: 'Q', range: 220, color: '#b7a06d' },
+    { key: 'E', range: 310, color: '#e0d27d' },
+    { key: 'F', range: 780, color: '#8fd06f' }
+  ],
+  blood: [
+    { key: 'Q', range: 300, color: '#ff4964' },
+    { key: 'E', range: 150, color: '#ff8596' },
+    { key: 'F', range: 100, color: '#c71835' }
+  ],
+  lightning: [
+    { key: 'Q', range: 1200, color: '#ffe75c' },
+    { key: 'E', range: 100, color: '#a9f0ff' },
+    { key: 'F', range: 2000, color: '#ffffff' }
+  ],
+  void: [
+    { key: 'Q', range: 640, color: '#b872ff' },
+    { key: 'E', range: 1040, color: '#8c5dff' },
+    { key: 'F', range: 250, color: '#db9cff' }
+  ],
+  crusader: [
+    { key: 'Q', range: 630, color: '#fff2a8' },
+    { key: 'E', range: 160, color: '#f8f8ff' },
+    { key: 'F', range: 250, color: '#ffd36a' }
+  ]
+};
+
 // ── STATE ────────────────────────────────────────
 let ws = null, myId = null, myClass = null, myName = '';
 let dead = false, killcount = 0, gameStartTime = 0;
@@ -29,6 +67,8 @@ let capturePoint = {}, cpRenderPercent = 0;
 let zoom = 1.1, direction = 0;
 const pressed = {};
 let lastMoveSend = 0;
+let rangeOverlayCanvas = null, rangeOverlayCtx = null;
+let rangeOverlayAlpha = 0;
 // ── PIXI OBJECTS ─────────────────────────────────
 let app, mapContainer, uiContainer;
 let obstacleLayer, projLayer, aboveObstacleLayer, playerLayer, trailLayer, bushLayer, highPlayerLayer, damageTextLayer;
@@ -101,6 +141,7 @@ function initJoinScreen() {
     document.getElementById('chatBox').style.display = 'flex';
     gameStartTime = Date.now();
     dead = false; killcount = 0;
+    resetRangeOverlay();
     players = {}; projectiles = {}; obstacles = {};
     clearScene();
     if (!pixiReady) initPixi();
@@ -120,6 +161,7 @@ function initJoinScreen() {
     document.getElementById('chatBox').style.display = 'flex';
     gameStartTime = Date.now();
     dead = false; killcount = 0;
+    resetRangeOverlay();
     players = {}; projectiles = {}; obstacles = {};
     clearScene();
     if (!pixiReady) initPixi();
@@ -134,6 +176,7 @@ function initJoinScreen() {
     hideDebug();
     ws = null;
     myId = null; dead = false; killcount = 0;
+    resetRangeOverlay();
     players = {}; projectiles = {}; obstacles = {};
     clearScene();
   });
@@ -167,14 +210,17 @@ function drawMapBg() {
 
 function initPixi() {
   pixiReady = true;
+  const gameScreen = document.getElementById('gameScreen');
+  if (getComputedStyle(gameScreen).position === 'static') gameScreen.style.position = 'relative';
+
   app = new PIXI.Application({
-    resizeTo: document.getElementById('gameScreen'),
+    resizeTo: gameScreen,
     backgroundColor: 0x427e3a,
     antialias: true,
     resolution: window.devicePixelRatio || 1,
     autoDensity: true,
   });
-  document.getElementById('gameScreen').appendChild(app.view);
+  gameScreen.appendChild(app.view);
 
   mapContainer = new PIXI.Container();
   uiContainer    = new PIXI.Container();
@@ -197,6 +243,7 @@ function initPixi() {
 
   generateTextures();
   initUI();
+  initRangeOverlay(gameScreen);
   app.ticker.add(gameLoop);
 }
 
@@ -576,9 +623,11 @@ document.addEventListener('keydown', e => {
   }
 
   pressed[key] = true;
+  if (key === 'x') rangeOverlayAlpha = Math.max(rangeOverlayAlpha, 0.01);
   if ((e.key === 'Delete' || e.key === 'Backspace') && document.getElementById('gameScreen').style.display === 'block') {
     if (ws) { ws.close(); ws = null; }
     myId = null; dead = false; killcount = 0;
+    resetRangeOverlay();
     players = {}; projectiles = {}; obstacles = {};
     clearScene();
     document.getElementById('gameScreen').style.display = 'none';
@@ -606,6 +655,9 @@ document.addEventListener('keyup', e => {
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   pressed[key] = false;
 });
+window.addEventListener('blur', () => {
+  pressed.x = false;
+});
 document.addEventListener('mousemove', e => {
   if (!app) return;
   const pl = players[myId];
@@ -630,6 +682,110 @@ window.addEventListener('resize', () => {
 function sendAttack(move) {
   if (ws && ws.readyState === WebSocket.OPEN)
     ws.send(JSON.stringify({ type: 'attack', move, dir: direction }));
+}
+
+// ═══════════════════════════════════════════════════
+//  RANGE OVERLAY
+// ═══════════════════════════════════════════════════
+function initRangeOverlay(gameScreen) {
+  if (rangeOverlayCanvas) return;
+  rangeOverlayCanvas = document.createElement('canvas');
+  rangeOverlayCanvas.id = 'circle-range-overlay';
+  rangeOverlayCanvas.style.cssText = [
+    'position:absolute',
+    'inset:0',
+    'width:100%',
+    'height:100%',
+    'pointer-events:none',
+    'z-index:4'
+  ].join(';');
+  gameScreen.appendChild(rangeOverlayCanvas);
+  rangeOverlayCtx = rangeOverlayCanvas.getContext('2d');
+}
+
+function resetRangeOverlay() {
+  pressed.x = false;
+  rangeOverlayAlpha = 0;
+  if (rangeOverlayCtx && app) {
+    rangeOverlayCtx.clearRect(0, 0, app.screen.width, app.screen.height);
+  }
+}
+
+function resizeRangeOverlay(width, height) {
+  if (!rangeOverlayCanvas || !rangeOverlayCtx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const pixelWidth = Math.max(1, Math.round(width * dpr));
+  const pixelHeight = Math.max(1, Math.round(height * dpr));
+  if (rangeOverlayCanvas.width !== pixelWidth || rangeOverlayCanvas.height !== pixelHeight) {
+    rangeOverlayCanvas.width = pixelWidth;
+    rangeOverlayCanvas.height = pixelHeight;
+  }
+  rangeOverlayCanvas.style.width = `${width}px`;
+  rangeOverlayCanvas.style.height = `${height}px`;
+  rangeOverlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawRangeOverlay(pl) {
+  if (!rangeOverlayCtx || !app) return;
+  const width = app.screen.width;
+  const height = app.screen.height;
+  resizeRangeOverlay(width, height);
+  rangeOverlayCtx.clearRect(0, 0, width, height);
+
+  const targetAlpha = pressed.x && pl && !dead && document.getElementById('gameScreen').style.display === 'block' ? 1 : 0;
+  rangeOverlayAlpha += (targetAlpha - rangeOverlayAlpha) * 0.22;
+  if (rangeOverlayAlpha < 0.01) return;
+
+  const className = (pl.gameClass || myClass || '').toLowerCase();
+  const abilities = ABILITY_RANGES[className] || [];
+  if (!abilities.length) return;
+
+  const ctx = rangeOverlayCtx;
+  const cx = width / 2;
+  const cy = height / 2;
+  const currentZoom = Math.max(zoom, getMinZoom());
+
+  ctx.save();
+  ctx.globalAlpha = rangeOverlayAlpha;
+  ctx.font = '700 13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  for (let i = abilities.length - 1; i >= 0; i--) {
+    const ability = abilities[i];
+    drawRangeRing(ctx, cx, cy, Math.max(1, ability.range * currentZoom), ability, i);
+  }
+
+  ctx.restore();
+}
+
+function drawRangeRing(ctx, cx, cy, radius, ability, index) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = hexToRgba(ability.color, 0.045);
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = hexToRgba(ability.color, 0.78);
+  ctx.stroke();
+
+  const label = `${ability.key} ${ability.range}`;
+  const labelAngles = [-Math.PI / 2, -Math.PI / 2 + 0.24, -Math.PI / 2 - 0.24];
+  const angle = labelAngles[index] ?? -Math.PI / 2;
+  const labelX = cx + Math.cos(angle) * radius;
+  const labelY = cy + Math.sin(angle) * radius;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.72)';
+  ctx.strokeText(label, labelX, labelY);
+  ctx.fillStyle = ability.color;
+  ctx.fillText(label, labelX, labelY);
+}
+
+function hexToRgba(hex, alpha) {
+  const value = parseInt(hex.slice(1), 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 // ═══════════════════════════════════════════════════
@@ -748,7 +904,10 @@ function gameLoop() {
   const now = Date.now();
   if (now - lastFrameTime < FRAME_MIN_MS) {return;}
   lastFrameTime = now;
-  if (!myId) return;
+  if (!myId) {
+    drawRangeOverlay(null);
+    return;
+  }
   if (now - 100000 > gameStartTime && !players[myId] && !dead) { triggerDeath(); return; }
 
   if (now - lastMoveSend >= 50 && ws && ws.readyState === WebSocket.OPEN) {
@@ -763,7 +922,11 @@ function gameLoop() {
   }
 
   const pl = players[myId];
-  if (!pl) return;
+  if (!pl) {
+    drawRangeOverlay(null);
+    return;
+  }
+  drawRangeOverlay(pl);
 
   for (const p of Object.values(players)) {
     const t = Math.min((now - p.lastUpdateTime) / SERVER_TICK, 1);
