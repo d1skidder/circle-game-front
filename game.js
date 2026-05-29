@@ -216,7 +216,7 @@ function clearScene() {
   bushLayer = new PIXI.Container();
   highPlayerLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, damageTextLayer, playerLayer, bushLayer, highPlayerLayer, capturePointGraphic);
+  mapContainer.addChild(projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, playerLayer, bushLayer, highPlayerLayer, capturePointGraphic, damageTextLayer);
   playerContainers = {}; projContainers = {}; obstacleSprites = {}; npcContainers = {};
   frenzyTrails = [];
   lightningParticles = [];
