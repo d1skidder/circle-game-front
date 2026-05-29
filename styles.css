@@ -110,6 +110,17 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0614; }
   border-top: 1px solid #4f337a;
 }
 
+/* ── LOADING SCREEN ── */
+#loadingScreen {
+  position: fixed; inset: 0; z-index: 500;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(11, 6, 20, 0.95);
+  font-family: 'IM Fell English SC', serif;
+  color: #cc99ff;
+  font-size: 28px;
+  letter-spacing: 4px;
+}
+
 /* ── GAME SCREEN ── */
 #gameScreen { position: fixed; inset: 0; display: none; }
 #gameScreen canvas { display: block; }

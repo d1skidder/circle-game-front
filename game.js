@@ -88,7 +88,7 @@ function initJoinScreen() {
     document.getElementById('team-select').style.display = (val === 1 || val === 2 || val === 3) ? 'block' : 'none';
   });
 
-  document.getElementById('join-btn').addEventListener('click', () => {
+  document.getElementById('join-btn').addEventListener('click', async () => {
     myName = document.getElementById('name-input').value.trim();
     myClass = selectedClass;
     sessionId = parseInt(document.getElementById('session-select').value, 10);
@@ -104,11 +104,11 @@ function initJoinScreen() {
     dead = false; killcount = 0;
     players = {}; projectiles = {}; obstacles = {};
     clearScene();
-    if (!pixiReady) initPixi();
+    if (!pixiReady) await initPixi(); else app.resize();
     connectWS();
   });
 
-  document.getElementById('spectate-btn').addEventListener('click', () => {
+  document.getElementById('spectate-btn').addEventListener('click', async () => {
     const spectatorName = document.getElementById('name-input').value.trim();
     if (!spectatorName) return;
     myName = spectatorName;
@@ -123,7 +123,7 @@ function initJoinScreen() {
     dead = false; killcount = 0;
     players = {}; projectiles = {}; obstacles = {};
     clearScene();
-    if (!pixiReady) initPixi();
+    if (!pixiReady) await initPixi(); else app.resize();
     connectWS();
   });
 
@@ -166,7 +166,7 @@ function drawMapBg() {
   mapBg.endFill();
 }
 
-function initPixi() {
+async function initPixi() {
   pixiReady = true;
   app = new PIXI.Application({
     resizeTo: document.getElementById('gameScreen'),
@@ -196,7 +196,7 @@ function initPixi() {
   capturePointGraphic = new PIXI.Graphics();
   mapContainer.addChild(capturePointGraphic, projLayer, trailLayer, obstacleLayer, damageTextLayer, playerLayer, bushLayer, aboveObstacleLayer,highPlayerLayer);
 
-  generateTextures();
+  await loadAllAssets();
   initUI();
   app.ticker.add(gameLoop);
 }
@@ -247,25 +247,66 @@ function clearScene() {
 // ═══════════════════════════════════════════════════
 //  TEXTURE GENERATION
 // ═══════════════════════════════════════════════════
-function generateTextures() {
-  texCache.sword         = PIXI.Texture.from('assets/swordSprite.png');
-  texCache.enhancedSword = PIXI.Texture.from('assets/stone_club.webp');
-  texCache.voidOuter  = PIXI.Texture.from('assets/voidOuterRingClean.png');
-  texCache.voidMiddle = PIXI.Texture.from('assets/voidMiddleRingClean.png');
-  texCache.voidInner  = PIXI.Texture.from('assets/voidInnerRingClean.png');
-  texCache.crusadeWing = PIXI.Texture.from('assets/CrusadeWingClean.png');
-  texCache.holySword = PIXI.Texture.from('assets/holy_sword.webp');
-  texCache.earthWave = PIXI.Texture.from('assets/earth_wave.webp');
-  texCache.iceSword      = PIXI.Texture.from('assets/iceblade.webp');
-  texCache.rock          = makeRockTexture();
-  texCache.bush          = PIXI.Texture.from('assets/bush.webp');
-  texCache.rockfist      = PIXI.Texture.from('assets/rockfist.webp');
-  texCache.lavabug       = PIXI.Texture.from('assets/lavabug.webp');
-  texCache.goldenhelm    = PIXI.Texture.from('assets/goldenhelm.webp');
-  texCache.wingedhelm    = PIXI.Texture.from('assets/wingedhelm.webp');
-  texCache.shockwaveFrames = Array.from({length: 8}, (_, i) =>
-    PIXI.Texture.from(`assets/shockwave/Quake${i + 1}.PNG`)
+async function loadAllAssets() {
+  const loadingEl = document.getElementById('loadingScreen');
+  const pctEl = document.getElementById('loadingPct');
+  loadingEl.style.display = 'flex';
+  const setPercent = p => { pctEl.textContent = Math.round(p); };
+  setPercent(0);
+
+  const staticUrls = [
+    'assets/swordSprite.png',
+    'assets/stone_club.webp',
+    'assets/voidOuterRingClean.png',
+    'assets/voidMiddleRingClean.png',
+    'assets/voidInnerRingClean.png',
+    'assets/CrusadeWingClean.png',
+    'assets/holy_sword.webp',
+    'assets/earth_wave.webp',
+    'assets/iceblade.webp',
+    'assets/bush.webp',
+    'assets/rockfist.webp',
+    'assets/lavabug.webp',
+    'assets/goldenhelm.webp',
+    'assets/wingedhelm.webp',
+  ];
+  const spinUrls  = Array.from({length: 32}, (_, i) => `assets/Sword spin/Spin${i + 1}.PNG`);
+  const shockUrls = Array.from({length: 8},  (_, i) => `assets/shockwave/Quake${i + 1}.PNG`);
+
+  await PIXI.Assets.load(
+    [...staticUrls, ...spinUrls, ...shockUrls],
+    progress => setPercent(progress * 100)
   );
+
+  const bake = url => {
+    const tex = PIXI.Texture.from(url);
+    const sp = new PIXI.Sprite(tex);
+    const rt = PIXI.RenderTexture.create({ width: tex.width, height: tex.height });
+    app.renderer.render(sp, { renderTexture: rt });
+    sp.destroy();
+    return rt;
+  };
+
+  texCache.sword           = bake('assets/swordSprite.png');
+  texCache.enhancedSword   = bake('assets/stone_club.webp');
+  texCache.voidOuter       = bake('assets/voidOuterRingClean.png');
+  texCache.voidMiddle      = bake('assets/voidMiddleRingClean.png');
+  texCache.voidInner       = bake('assets/voidInnerRingClean.png');
+  texCache.crusadeWing     = bake('assets/CrusadeWingClean.png');
+  texCache.holySword       = bake('assets/holy_sword.webp');
+  texCache.earthWave       = bake('assets/earth_wave.webp');
+  texCache.iceSword        = bake('assets/iceblade.webp');
+  texCache.rock            = makeRockTexture();
+  texCache.bush            = bake('assets/bush.webp');
+  texCache.rockfist        = bake('assets/rockfist.webp');
+  texCache.lavabug         = bake('assets/lavabug.webp');
+  texCache.goldenhelm      = bake('assets/goldenhelm.webp');
+  texCache.wingedhelm      = bake('assets/wingedhelm.webp');
+
+  texCache.swordSpinFrames = spinUrls.map(bake);
+  texCache.shockwaveFrames = shockUrls.map(bake);
+  setPercent(100);
+  loadingEl.style.display = 'none';
 }
 
 function bakeGraphic(g, w, h, cx, cy) {
@@ -1744,6 +1785,21 @@ function buildProjContainer(type, radius) {
       proj.addChild(g);
       break;
     }
+    case 'spincut': {
+      const anim = new PIXI.AnimatedSprite(texCache.swordSpinFrames);
+      anim.anchor.set(0.5);
+      anim.loop = false;
+      anim.animationSpeed = 0.4;
+      anim.onComplete = () => { anim.visible = false; };
+      anim.play();
+      anim.name = 'spinAnim';
+      proj.addChild(anim);
+      proj._spinBorn = Date.now();
+      break;
+    }
+    case 'spincutinner': {
+      break;
+    }
     default: {
       const def=new PIXI.Graphics();def.name='defCircle';def.beginFill(0x8888ff,0.4);def.drawCircle(0,0,r);def.endFill();proj.addChild(def);
     }
@@ -2257,6 +2313,14 @@ function updateProjSprite(id, p, now) {
         flash.x = cx; flash.y = cy;
         trailLayer.addChild(flash);
         frenzyTrails.push({ g: flash, born: now, ttl: 200, fadeOnly: true });
+      }
+      break;
+    }
+    case 'spincut': {
+      const anim = c.getChildByName('spinAnim');
+      if (anim) {
+        anim.width  = r * 2.36*1.5;
+        anim.height = r * 1.64*1.5;
       }
       break;
     }
@@ -2851,4 +2915,5 @@ function triggerDeath() {
 // ── BOOT ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initJoinScreen();
+  initPixi();
 });
