@@ -29,6 +29,7 @@ let players = {}, projectiles = {}, obstacles = {}, npcs = {};
 let capturePoint = {}, cpRenderPercent = 0;
 let zoom = 1.1, direction = 0;
 const pressed = {};
+let mouseHeld = false;
 let lastMoveSend = 0;
 // ── PIXI OBJECTS ─────────────────────────────────
 let app, mapContainer, uiContainer;
@@ -638,9 +639,6 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (!myId || dead) return;
-  if (key === 'q') sendAttack('skill1');
-  if (key === 'e') sendAttack('skill2');
-  if (key === 'f') sendAttack('skill3');
   if (key === 't' && ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'switchMode' }));
 });
 document.addEventListener('keyup', e => {
@@ -659,9 +657,13 @@ document.addEventListener('mousemove', e => {
   pl.renderDir = direction;
 });
 document.addEventListener('mousedown', e => {
-  if (myId && !dead && document.getElementById('gameScreen').style.display === 'block')
+  if (myId && !dead && document.getElementById('gameScreen').style.display === 'block') {
+    mouseHeld = true;
     sendAttack('basicMelee');
+  }
 });
+document.addEventListener('mouseup', () => { mouseHeld = false; });
+document.addEventListener('mouseleave', () => { mouseHeld = false; });
 document.addEventListener('wheel', e => {
   zoom = e.deltaY > 0 ? Math.min(4.0, zoom + 0.03) : Math.max(getMinZoom(), zoom - 0.03);
 });
@@ -801,6 +803,10 @@ function gameLoop() {
     if (pressed['ArrowRight'] || pressed['d']) x++;
     if (x !== 0 && y !== 0) { x *= 0.707; y *= 0.707; }
     ws.send(JSON.stringify({ type: 'move', x, y, dir: direction }));
+    if (!dead && mouseHeld)   sendAttack('basicMelee');
+    if (!dead && pressed['q']) sendAttack('skill1');
+    if (!dead && pressed['e']) sendAttack('skill2');
+    if (!dead && pressed['f']) sendAttack('skill3');
     lastMoveSend = now;
   }
 
