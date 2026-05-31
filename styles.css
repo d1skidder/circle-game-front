@@ -125,6 +125,22 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0614; }
 #gameScreen { position: fixed; inset: 0; display: none; }
 #gameScreen canvas { display: block; }
 
+/* ── SESSION COUNTS PANEL ── */
+#session-counts-panel {
+  position: fixed; bottom: 16px; right: 16px;
+  z-index: 300; background: rgba(0,0,0,0.7);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px; padding: 8px 14px;
+  font-family: monospace; font-size: 13px;
+  color: #ccc; pointer-events: none;
+  display: none; flex-direction: column; gap: 3px;
+}
+#session-counts-title {
+  color: #fff; font-size: 12px; letter-spacing: 1px;
+  margin-bottom: 2px;
+}
+.session-count-row { color: #aac4ff; }
+
 /* ── DEBUG OVERLAY ── */
 #debug-overlay {
   position: fixed; top: 10px; left: 10px;

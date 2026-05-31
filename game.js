@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "wss://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "https://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 const BASE_VIEW_WIDTH  = 4800;
@@ -99,6 +99,7 @@ function initJoinScreen() {
       : null;
     myCode = document.getElementById('code-input').value.trim();
     if (!myName || !myClass) return;
+    stopSessionCounts();
     document.getElementById('joinScreen').style.display = 'none';
     document.getElementById('gameScreen').style.display = 'block';
     document.getElementById('chatBox').style.display = 'flex';
@@ -118,6 +119,7 @@ function initJoinScreen() {
     sessionId = parseInt(document.getElementById('session-select').value, 10);
     teamSelect = null;
     myCode = 'spectator';
+    stopSessionCounts();
     document.getElementById('joinScreen').style.display = 'none';
     document.getElementById('gameScreen').style.display = 'block';
     document.getElementById('chatBox').style.display = 'flex';
@@ -132,6 +134,7 @@ function initJoinScreen() {
   document.getElementById('respawn-btn').addEventListener('click', () => {
     document.getElementById('deathScreen').style.display = 'none';
     document.getElementById('joinScreen').style.display = 'flex';
+    startSessionCounts();
     document.getElementById('gameScreen').style.display = 'none';
     document.getElementById('chatBox').style.display = 'none';
     hideDebug();
@@ -145,6 +148,29 @@ function initJoinScreen() {
 function checkReady() {
   const name = document.getElementById('name-input').value.trim();
   document.getElementById('join-btn').disabled = !(name.length > 0 && selectedClass);
+}
+
+function fetchSessionCounts() {
+  const sock = new WebSocket(WS_URL);
+  sock.onopen = () => sock.send(JSON.stringify({ type: 'sessions' }));
+  sock.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type !== 'sessions') return;
+      const panel = document.getElementById('session-counts-panel');
+      panel.querySelectorAll('.session-count-row').forEach(el => el.remove());
+      for (const [id, n] of Object.entries(msg)) {
+        if (id === 'type') continue;
+        const row = document.createElement('div');
+        row.className = 'session-count-row';
+        row.textContent = `Session ${id}: ${n}`;
+        panel.appendChild(row);
+      }
+    } finally {
+      sock.close();
+    }
+  };
+  sock.onerror = () => sock.close();
 }
 
 // ═══════════════════════════════════════════════════
@@ -3006,7 +3032,22 @@ function triggerDeath() {
 }
 
 // ── BOOT ─────────────────────────────────────────
+let _sessionCountsTimer = null;
+
+function startSessionCounts() {
+  document.getElementById('session-counts-panel').style.display = 'flex';
+  fetchSessionCounts();
+  _sessionCountsTimer = setInterval(fetchSessionCounts, 5000);
+}
+
+function stopSessionCounts() {
+  clearInterval(_sessionCountsTimer);
+  _sessionCountsTimer = null;
+  document.getElementById('session-counts-panel').style.display = 'none';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initJoinScreen();
   initPixi();
+  startSessionCounts();
 });
