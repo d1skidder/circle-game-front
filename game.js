@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "https://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 const BASE_VIEW_WIDTH  = 4800;
@@ -605,7 +605,7 @@ function handleMessage(msg) {
     team0score = msg.team0score;
     team1score = msg.team1score;
     if (msg.capturepoint) {
-      const cp = JSON.parse(msg.capturepoint);
+      const cp = msg.capturepoint;
       capturePoint = { x: cp.x, y: cp.y, radius: cp.radius, captureState: cp.captureState, text: cp.text, percentage: cp.percentage };
     }
   }
