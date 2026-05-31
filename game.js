@@ -33,10 +33,11 @@ let mouseHeld = false;
 let lastMoveSend = 0;
 // ── PIXI OBJECTS ─────────────────────────────────
 let app, mapContainer, uiContainer;
-let obstacleLayer, projLayer, aboveObstacleLayer, playerLayer, trailLayer, bushLayer, highPlayerLayer, damageTextLayer;
+let obstacleLayer, projLayer, aboveObstacleLayer, playerLayer, trailLayer, bushLayer, highPlayerLayer, damageTextLayer, groundObstacleLayer;
 let frenzyTrails = [];
 let lightningParticles = [];
 let mapBg = null;
+let starfieldBg = null;
 let capturePointGraphic = null;
 let playerContainers = {}, projContainers = {}, obstacleSprites = {}, npcContainers = {};
 let texCache = {};
@@ -155,32 +156,106 @@ function drawMapBg() {
   mapBg.beginFill(0x427e3a);
   mapBg.drawRect(0, 0, MAP_DIM, MAP_DIM);
   mapBg.endFill();
-  mapBg.lineStyle(1, 0x326420, 0.4);
+  mapBg.lineStyle(1, 0x000000, 0.08);
   for (let x = 0; x <= MAP_DIM; x += 100) { mapBg.moveTo(x,0); mapBg.lineTo(x,MAP_DIM); }
   for (let y = 0; y <= MAP_DIM; y += 100) { mapBg.moveTo(0,y); mapBg.lineTo(MAP_DIM,y); }
-  mapBg.lineStyle(5, 0x223e1a, 1);
-  mapBg.drawRect(0, 0, MAP_DIM, MAP_DIM);
   // ── dim overlay ──
   mapBg.lineStyle(0);
   mapBg.beginFill(0x000000, 0.15);
   mapBg.drawRect(0, 0, MAP_DIM, MAP_DIM);
   mapBg.endFill();
+  // ── session 3: upper-third snow white + lower-third dark grey spawn zone ──
+  if (sessionId === 3) {
+    const thirdY = Math.floor(MAP_DIM / 3);
+    const twoThirdY = Math.floor(MAP_DIM * 2 / 3);
+    // upper third — snow white
+    mapBg.beginFill(0xc8d8e8, 1);
+    mapBg.drawRect(0, 0, MAP_DIM, thirdY);
+    mapBg.endFill();
+    mapBg.lineStyle(1, 0x000000, 0.06);
+    for (let x = 0; x <= MAP_DIM; x += 100) { mapBg.moveTo(x, 0); mapBg.lineTo(x, thirdY); }
+    for (let y = 0; y <= thirdY; y += 100) { mapBg.moveTo(0, y); mapBg.lineTo(MAP_DIM, y); }
+    mapBg.lineStyle(0);
+    // lower third — dark grey
+    mapBg.beginFill(0x222222, 1);
+    mapBg.drawRect(0, twoThirdY, MAP_DIM, MAP_DIM - twoThirdY);
+    mapBg.endFill();
+    mapBg.lineStyle(1, 0xffffff, 0.06);
+    for (let x = 0; x <= MAP_DIM; x += 100) { mapBg.moveTo(x, twoThirdY); mapBg.lineTo(x, MAP_DIM); }
+    for (let y = twoThirdY; y <= MAP_DIM; y += 100) { mapBg.moveTo(0, y); mapBg.lineTo(MAP_DIM, y); }
+    mapBg.lineStyle(0);
+    // river — parallelogram segments running horizontally through the map center
+    const riverCy = MAP_DIM / 2;
+    const riverHalf = 200;
+    const numSegs = Math.ceil(MAP_DIM / 300);
+    const segW = MAP_DIM / numSegs;
+    const cys = [riverCy];
+    for (let i = 1; i <= numSegs; i++) {
+      const prev = cys[i - 1];
+      const restored = prev + (riverCy - prev) * 0.35 + (Math.random() - 0.5) * 70;
+      cys.push(Math.max(riverCy - 60, Math.min(riverCy + 60, restored)));
+    }
+    for (let i = 0; i < numSegs; i++) {
+      const x0 = i * segW, x1 = (i + 1) * segW;
+      const cy0 = cys[i], cy1 = cys[i + 1];
+      mapBg.beginFill(0x2288cc, 0.82);
+      mapBg.drawPolygon([x0, cy0 - riverHalf, x1, cy1 - riverHalf, x1, cy1 + riverHalf, x0, cy0 + riverHalf]);
+      mapBg.endFill();
+    }
+  }
 }
 
 async function initPixi() {
   pixiReady = true;
   app = new PIXI.Application({
     resizeTo: document.getElementById('gameScreen'),
-    backgroundColor: 0x427e3a,
+    backgroundColor: 0x0b0820,
     antialias: true,
     resolution: window.devicePixelRatio || 1,
     autoDensity: true,
   });
   document.getElementById('gameScreen').appendChild(app.view);
 
+  starfieldBg = new PIXI.Graphics();
+  // milky way band — diagonal strip of near-transparent soft circles
+  const mwCx = 700;
+  const mwSlope = 0.35; // x shifts right as y increases
+  const mwColors = [0x9944ff, 0xcc66ff, 0x4477ff, 0x88bbff, 0xff7733, 0xffaa55];
+  for (let i = 0; i < 1800; i++) {
+    const u = Math.random() + Math.random() - 1; // roughly normal via sum of uniforms
+    const y = Math.random() * 2000;
+    const x = mwCx + u * 220 + y * mwSlope;
+    const r = 1.5 + Math.random() * 4;
+    const alpha = 0.04 + Math.random() * 0.07;
+    const col = mwColors[Math.floor(Math.random() * mwColors.length)];
+    starfieldBg.beginFill(col, alpha);
+    starfieldBg.drawCircle(x, y, r);
+    starfieldBg.endFill();
+  }
+  // thin bright white core band through the milky way center
+  for (let i = 0; i < 800; i++) {
+    const u = Math.random() + Math.random() - 1;
+    const y = Math.random() * 2000;
+    const x = mwCx + u * 60 + y * mwSlope;
+    const r = 1.0 + Math.random() * 2.0;
+    const alpha = 0.1 + Math.random() * 0.14;
+    starfieldBg.beginFill(0xffffff, alpha);
+    starfieldBg.drawCircle(x, y, r);
+    starfieldBg.endFill();
+  }
+  for (let i = 0; i < 2000; i++) {
+    const x = Math.random() * 3000;
+    const y = Math.random() * 2000;
+    const r = Math.random() < 0.15 ? 1.5 : 0.75;
+    const alpha = Math.random() * 0.5 + 0.5;
+    starfieldBg.beginFill(0xffffff, alpha);
+    starfieldBg.drawRect(x, y, r, r);
+    starfieldBg.endFill();
+  }
+
   mapContainer = new PIXI.Container();
   uiContainer    = new PIXI.Container();
-  app.stage.addChild(mapContainer, uiContainer);
+  app.stage.addChild(starfieldBg, mapContainer, uiContainer);
 
   mapBg = new PIXI.Graphics();
   mapContainer.addChild(mapBg);
@@ -194,8 +269,9 @@ async function initPixi() {
   playerLayer = new PIXI.Container();
   bushLayer = new PIXI.Container();
   highPlayerLayer = new PIXI.Container();
+  groundObstacleLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(capturePointGraphic, projLayer, trailLayer, obstacleLayer, damageTextLayer, playerLayer, bushLayer, aboveObstacleLayer,highPlayerLayer);
+  mapContainer.addChild(capturePointGraphic, groundObstacleLayer, projLayer, trailLayer, obstacleLayer, damageTextLayer, playerLayer, bushLayer, aboveObstacleLayer,highPlayerLayer);
 
   await loadAllAssets();
   initUI();
@@ -216,8 +292,9 @@ function clearScene() {
   playerLayer = new PIXI.Container();
   bushLayer = new PIXI.Container();
   highPlayerLayer = new PIXI.Container();
+  groundObstacleLayer = new PIXI.Container();
   capturePointGraphic = new PIXI.Graphics();
-  mapContainer.addChild(projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, playerLayer, bushLayer, highPlayerLayer, capturePointGraphic, damageTextLayer);
+  mapContainer.addChild(groundObstacleLayer, projLayer, obstacleLayer, aboveObstacleLayer, trailLayer, playerLayer, bushLayer, highPlayerLayer, capturePointGraphic, damageTextLayer);
   playerContainers = {}; projContainers = {}; obstacleSprites = {}; npcContainers = {};
   frenzyTrails = [];
   lightningParticles = [];
@@ -321,8 +398,8 @@ function bakeGraphic(g, w, h, cx, cy) {
 function makeRockTexture() {
   const g = new PIXI.Graphics();
   const cx = 50, cy = 50, r = 42;
-  g.lineStyle(3, 0x1a2a1a, 0.9);
-  g.beginFill(0x4a5e3a, 1);
+  g.lineStyle(3, 0x1a1a1a, 0.9);
+  g.beginFill(0x555555, 1);
   g.moveTo(cx + r * Math.cos(-Math.PI/2), cy + r * Math.sin(-Math.PI/2));
   for (let i = 1; i <= 8; i++) {
     const ang = -Math.PI/2 + (i / 8) * Math.PI * 2;
@@ -330,7 +407,7 @@ function makeRockTexture() {
   }
   g.endFill();
   g.lineStyle(0);
-  g.beginFill(0x6a7e55, 0.5);
+  g.beginFill(0x7a7a7a, 0.5);
   g.moveTo(cx + (r*0.55)*Math.cos(-Math.PI/2), cy + (r*0.55)*Math.sin(-Math.PI/2));
   for (let i = 1; i <= 8; i++) {
     const ang = -Math.PI/2 + (i/8)*Math.PI*2;
@@ -639,6 +716,9 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (!myId || dead) return;
+  if (key === 'q') sendAttack('skill1');
+  if (key === 'e') sendAttack('skill2');
+  if (key === 'f') sendAttack('skill3');
   if (key === 't' && ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'switchMode' }));
 });
 document.addEventListener('keyup', e => {
@@ -804,9 +884,6 @@ function gameLoop() {
     if (x !== 0 && y !== 0) { x *= 0.707; y *= 0.707; }
     ws.send(JSON.stringify({ type: 'move', x, y, dir: direction }));
     if (!dead && mouseHeld)   sendAttack('basicMelee');
-    if (!dead && pressed['q']) sendAttack('skill1');
-    if (!dead && pressed['e']) sendAttack('skill2');
-    if (!dead && pressed['f']) sendAttack('skill3');
     lastMoveSend = now;
   }
 
@@ -2371,13 +2448,23 @@ function getOrCreateObstacle(id, ob) {
     s.width = r*6; s.height = r*4;
     c.addChild(s);
     display = c;
+  } else if (ob.type === 'magma') {
+    const g = new PIXI.Graphics();
+    g.beginFill(0xff4400, 1); g.drawCircle(0, 0, ob.radius); g.endFill();
+    display = g;
+  } else if (ob.type === 'icelake') {
+    const g = new PIXI.Graphics();
+    g.beginFill(0x88ddff, 1); g.drawCircle(0, 0, ob.radius); g.endFill();
+    display = g;
   } else {
     const s = new PIXI.Sprite(texCache.rock);
     s.anchor.set(0.5); s.width = ob.radius * (100/42); s.height = ob.radius * (100/42);
     display = s;
   }
   display.x = ob.x; display.y = ob.y;
-  (ob.type === 'bush' ? bushLayer : obstacleLayer).addChild(display);
+  if (ob.type === 'bush') bushLayer.addChild(display);
+  else if (ob.type === 'magma' || ob.type === 'icelake') groundObstacleLayer.addChild(display);
+  else obstacleLayer.addChild(display);
   obstacleSprites[id] = display;
 }
 
