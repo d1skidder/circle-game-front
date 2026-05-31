@@ -601,13 +601,13 @@ function handleMessage(msg) {
     dbgSet('dbg-id', `⬤ Session ID: ${sessionId}, Gamemode: ${modeText}`, 'ok');
   }
 
-  if (msg.type === 'capturepoint') {
-    capturePoint = { x: msg.x, y: msg.y, radius: msg.radius, captureState: msg.captureState, text: msg.text, percentage: msg.percentage };
-  }
-
   if (msg.type === 'gameState') {
     team0score = msg.team0score;
     team1score = msg.team1score;
+    if (msg.capturepoint) {
+      const cp = JSON.parse(msg.capturepoint);
+      capturePoint = { x: cp.x, y: cp.y, radius: cp.radius, captureState: cp.captureState, text: cp.text, percentage: cp.percentage };
+    }
   }
 
   if (msg.type === 'chatMessage') {
