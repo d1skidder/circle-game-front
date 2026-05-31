@@ -2523,7 +2523,7 @@ function initUI() {
   const skillOutlines = [];
 
   const miniMap = new PIXI.Graphics();
-  miniMap.beginFill(0x324e2a, 0.5);
+  miniMap.beginFill(0x888888, 0.5);
   miniMap.drawRect(mmX + 1, mmY + 1, mmSize - 2, mmSize - 2);
   miniMap.endFill();
   uiContainer.addChild(miniMap);
@@ -2696,7 +2696,7 @@ function drawUI(now, pl) {
     bg.endFill();
   });
   miniMap.clear();
-  miniMap.beginFill(0x324e2a, 0.5);
+  miniMap.beginFill(0x888888, 0.5);
   miniMap.drawRect(mmX + 1, mmY + 1, mmSize - 2, mmSize - 2);
   miniMap.endFill();
   hpStatText.x = mmStatX;
