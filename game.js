@@ -724,14 +724,7 @@ document.addEventListener('keydown', e => {
   pressed[key] = true;
   if ((e.key === 'Delete' || e.key === 'Backspace') && document.getElementById('gameScreen').style.display === 'block') {
     if (ws) { ws.close(); ws = null; }
-    myId = null; dead = false; killcount = 0;
-    players = {}; projectiles = {}; obstacles = {};
-    clearScene();
-    document.getElementById('gameScreen').style.display = 'none';
-    document.getElementById('deathScreen').style.display = 'none';
-    document.getElementById('joinScreen').style.display = 'flex';
-    document.getElementById('chatBox').style.display = 'none';
-    hideDebug();
+    triggerDeath();
     return;
   }
   if (e.key === 'Enter' && myId && document.getElementById('gameScreen').style.display === 'block') {
