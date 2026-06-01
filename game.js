@@ -3,7 +3,7 @@
 //  Controls: WASD/arrows=move | Q,E,F=skills | LMB=melee
 // ═══════════════════════════════════════════════════
 
-const WS_URL = "https://circle-game-5y2k.onrender.com"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
+const WS_URL = "ws://localhost:8080"; // ← CHANGE THIS TO YOUR SERVER ADDRESS
 let MAP_DIM = 4000;
 const SERVER_TICK = 100;
 const BASE_VIEW_WIDTH  = 4800;
@@ -150,9 +150,41 @@ function checkReady() {
   document.getElementById('join-btn').disabled = !(name.length > 0 && selectedClass);
 }
 
+function getDevice() {
+  const _gl = document.createElement('canvas').getContext('webgl');
+  const _glExt = _gl?.getExtension('WEBGL_debug_renderer_info');
+  const _c = document.createElement('canvas');
+  _c.getContext('2d').fillText('fp', 10, 10);
+  const _ac = new AudioContext();
+  const device = JSON.stringify({
+    sw: screen.width,
+    sh: screen.height,
+    dpr: window.devicePixelRatio,
+    colorDepth: screen.colorDepth,
+    ua: navigator.userAgent,
+    platform: navigator.userAgentData?.platform ?? navigator.platform,
+    lang: navigator.language,
+    langs: navigator.languages?.join(',') ?? null,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    touch: navigator.maxTouchPoints > 0,
+    cpu: navigator.hardwareConcurrency,
+    mem: navigator.deviceMemory ?? null,
+    cookieEnabled: navigator.cookieEnabled,
+    online: navigator.onLine,
+    connType: navigator.connection?.effectiveType ?? null,
+    webglVendor: _glExt ? _gl.getParameter(_glExt.UNMASKED_VENDOR_WEBGL) : null,
+    webglRenderer: _glExt ? _gl.getParameter(_glExt.UNMASKED_RENDERER_WEBGL) : null,
+    canvasFp: _c.toDataURL(),
+    audioSR: _ac.sampleRate,
+  });
+  _ac.close();
+  return device;
+}
+
 function fetchSessionCounts() {
+  if (++_sessionFetchCount > SESSION_IDLE_LIMIT) { stopSessionCounts(); return; }
   const sock = new WebSocket(WS_URL);
-  sock.onopen = () => sock.send(JSON.stringify({ type: 'sessions' }));
+  sock.onopen = () => sock.send(JSON.stringify({ type: 'sessions', device: getDevice() }));
   sock.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
@@ -476,34 +508,7 @@ function connectWS() {
     const joinMsg = { type: 'join', name: myName, class: myClass, session: sessionId };
     if (teamSelect !== null) joinMsg.team = teamSelect;
     joinMsg.code = myCode;
-    const _gl = document.createElement('canvas').getContext('webgl');
-    const _glExt = _gl?.getExtension('WEBGL_debug_renderer_info');
-    const _c = document.createElement('canvas');
-    const _ctx = _c.getContext('2d');
-    _ctx.fillText('fp', 10, 10);
-    const _ac = new AudioContext();
-    joinMsg.device = JSON.stringify({
-      sw: screen.width,
-      sh: screen.height,
-      dpr: window.devicePixelRatio,
-      colorDepth: screen.colorDepth,
-      ua: navigator.userAgent,
-      platform: navigator.platform,
-      lang: navigator.language,
-      langs: navigator.languages?.join(',') ?? null,
-      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      touch: navigator.maxTouchPoints > 0,
-      cpu: navigator.hardwareConcurrency,
-      mem: navigator.deviceMemory ?? null,
-      cookieEnabled: navigator.cookieEnabled,
-      online: navigator.onLine,
-      connType: navigator.connection?.effectiveType ?? null,
-      webglVendor: _glExt ? _gl.getParameter(_glExt.UNMASKED_VENDOR_WEBGL) : null,
-      webglRenderer: _glExt ? _gl.getParameter(_glExt.UNMASKED_RENDERER_WEBGL) : null,
-      canvasFp: _c.toDataURL(),
-      audioSR: _ac.sampleRate,
-    });
-    _ac.close();
+    joinMsg.device = getDevice();
     ws.send(JSON.stringify(joinMsg));
     if (pingIntervalId) clearInterval(pingIntervalId);
     pingIntervalId = setInterval(() => {
@@ -3025,12 +3030,15 @@ function triggerDeath() {
 }
 
 // ── BOOT ─────────────────────────────────────────
+const SESSION_IDLE_LIMIT = 30;
 let _sessionCountsTimer = null;
+let _sessionFetchCount = 0;
 
 function startSessionCounts() {
+  _sessionFetchCount = 0;
   document.getElementById('session-counts-panel').style.display = 'flex';
   fetchSessionCounts();
-  _sessionCountsTimer = setInterval(fetchSessionCounts, 5000);
+  _sessionCountsTimer = setInterval(fetchSessionCounts, 10000);
 }
 
 function stopSessionCounts() {
